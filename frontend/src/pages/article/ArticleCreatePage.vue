@@ -537,6 +537,10 @@
 import { ref, onBeforeUnmount, onMounted, nextTick, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
+
+defineOptions({
+  name: 'ArticleCreatePage'
+})
 import { useLoginUserStore } from '@/stores/loginUser'
 import {
   RocketOutlined,
