@@ -57,6 +57,29 @@ declare namespace API {
     status?: string
   }
 
+  type ArticleSyncRecordUpsertRequest = {
+    taskId?: string
+    platform?: string
+    platformName?: string
+    status?: 'SYNCING' | 'DRAFT_CREATED' | 'FAILED'
+    draftLink?: string
+    errorMessage?: string
+  }
+
+  type ArticleSyncRecordVO = {
+    id?: number
+    taskId?: string
+    userId?: number
+    platform?: string
+    platformName?: string
+    status?: 'SYNCING' | 'DRAFT_CREATED' | 'FAILED'
+    draftLink?: string
+    errorMessage?: string
+    lastSyncTime?: string
+    createTime?: string
+    updateTime?: string
+  }
+
   type ArticleVO = {
     id?: number
     taskId?: string
@@ -93,6 +116,12 @@ declare namespace API {
   type BaseResponseBoolean = {
     code?: number
     data?: boolean
+    message?: string
+  }
+
+  type BaseResponseListArticleSyncRecordVO = {
+    code?: number
+    data?: ArticleSyncRecordVO[]
     message?: string
   }
 

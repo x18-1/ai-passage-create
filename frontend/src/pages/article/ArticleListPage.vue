@@ -118,6 +118,16 @@
                   <DownloadOutlined />
                   导出
                 </a-button>
+                <a-button
+                  v-if="record.status === 'COMPLETED'"
+                  type="link"
+                  size="small"
+                  @click="publishArticle(record)"
+                  class="action-btn publish-btn"
+                >
+                  <SendOutlined />
+                  发布
+                </a-button>
                 <a-popconfirm
                   title="确定要删除这篇文章吗?"
                   ok-text="确定"
@@ -162,7 +172,8 @@ import {
   DownloadOutlined,
   DeleteOutlined,
   FileTextOutlined,
-  RedoOutlined
+  RedoOutlined,
+  SendOutlined,
 } from '@ant-design/icons-vue'
 import { listArticle, deleteArticle as deleteArticleApi, getArticle } from '@/api/articleController'
 import dayjs, { type Dayjs } from 'dayjs'
@@ -200,7 +211,7 @@ const columns = [
   {
     title: '操作',
     key: 'action',
-    width: 200,
+    width: 240,
   },
 ]
 
@@ -293,6 +304,15 @@ const handleTableChange = (pag: any) => {
 // 查看文章
 const viewArticle = (record: API.ArticleVO) => {
   router.push(`/article/${record.taskId}`)
+}
+
+const publishArticle = (record: API.ArticleVO) => {
+  router.push({
+    path: '/publish',
+    query: {
+      taskId: record.taskId || '',
+    },
+  })
 }
 
 // 导出文章

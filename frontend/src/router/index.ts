@@ -23,6 +23,11 @@ const router = createRouter({
       component: () => import('@/pages/article/ArticleListPage.vue'),
     },
     {
+      path: '/publish',
+      name: '发布中心',
+      component: () => import('@/pages/PublishPage.vue'),
+    },
+    {
       path: '/article/:taskId',
       name: '文章详情',
       component: () => import('@/pages/article/ArticleDetailPage.vue'),

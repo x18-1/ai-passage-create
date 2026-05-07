@@ -79,7 +79,8 @@ import {
   UnorderedListOutlined,
   SettingOutlined,
   CrownOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  SendOutlined,
 } from '@ant-design/icons-vue'
 import { isVip as checkIsVip } from '@/utils/permission'
 
@@ -111,6 +112,11 @@ const originItems = [
     key: '/article/list',
     icon: UnorderedListOutlined,
     label: '历史',
+  },
+  {
+    key: '/publish',
+    icon: SendOutlined,
+    label: '发布',
   },
   {
     key: '/admin/userManage',

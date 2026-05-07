@@ -2,6 +2,7 @@
 
 from app.models.user import User
 from app.models.article import Article
+from app.models.article_sync_record import ArticleSyncRecord
 from app.models.agent_log import AgentLog
 from app.models.payment import PaymentRecord
 from app.models.enums import (
@@ -15,6 +16,7 @@ from app.models.enums import (
 __all__ = [
     "User",
     "Article",
+    "ArticleSyncRecord",
     "AgentLog",
     "PaymentRecord",
     "ArticleStatusEnum",

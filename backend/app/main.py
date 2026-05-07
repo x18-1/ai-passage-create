@@ -11,6 +11,7 @@ from app.routers import (
     user_router,
     health_router,
     article_router,
+    article_sync_router,
     payment_router,
     webhook_router,
     statistics_router,
@@ -91,6 +92,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(health_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
 app.include_router(article_router, prefix="/api")
+app.include_router(article_sync_router, prefix="/api")
 app.include_router(payment_router, prefix="/api")
 app.include_router(webhook_router, prefix="/api")
 app.include_router(statistics_router, prefix="/api")
