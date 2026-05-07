@@ -27,7 +27,7 @@ class CosService:
         self.client = CosS3Client(config)
         self.bucket = settings.tencent_cos_bucket
         self.region = settings.tencent_cos_region
-        self.http_client = httpx.AsyncClient(timeout=30.0)
+        self.http_client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
     
     async def upload_image(self, image_url: str, folder: str) -> str:
         """

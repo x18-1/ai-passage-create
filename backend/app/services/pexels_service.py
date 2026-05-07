@@ -54,9 +54,12 @@ class PexelsService(ImageSearchService):
     
     def _build_search_url(self, keywords: str) -> str:
         """构建搜索 URL"""
+        import urllib.parse
+        clean_keywords = keywords.replace('\n', ' ').replace('\r', '').strip()
+        encoded_keywords = urllib.parse.quote(clean_keywords)
         return (
             f"{ArticleConstant.PEXELS_API_URL}"
-            f"?query={keywords}"
+            f"?query={encoded_keywords}"
             f"&per_page={ArticleConstant.PEXELS_PER_PAGE}"
             f"&orientation={ArticleConstant.PEXELS_ORIENTATION_LANDSCAPE}"
         )

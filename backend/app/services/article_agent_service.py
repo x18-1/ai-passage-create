@@ -348,10 +348,24 @@ class ArticleAgentService:
         
         return "".join(content_builder)
     
+    def _clean_json_content(self, content: str) -> str:
+        """清理 LLM 返回的 JSON 内容，去除可能的 markdown 格式"""
+        if not content:
+            return ""
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        elif content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        return content.strip()
+
     def _parse_json_response(self, content: str, name: str) -> dict:
         """解析 JSON 响应"""
         try:
-            result = json.loads(content)
+            cleaned_content = self._clean_json_content(content)
+            result = json.loads(cleaned_content)
             if not isinstance(result, dict):
                 raise ValueError("响应不是 JSON 对象")
             return result
@@ -365,7 +379,8 @@ class ArticleAgentService:
     def _parse_json_list_response(self, content: str, name: str) -> list:
         """解析 JSON 数组响应"""
         try:
-            result = json.loads(content)
+            cleaned_content = self._clean_json_content(content)
+            result = json.loads(cleaned_content)
             if not isinstance(result, list):
                 raise ValueError("响应不是 JSON 数组")
             return result
