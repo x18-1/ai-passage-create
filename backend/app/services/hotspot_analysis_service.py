@@ -399,19 +399,31 @@ class HotspotAnalysisService:
         match_hint = (
             f"文本预匹配命中：{'、'.join(pre_match.matched_terms)}"
             if pre_match.matched
-            else f"文本未直接提及关键词「{keyword}」，请严格判断相关性。"
+            else f"文本预匹配发现内容中未直接提及关键词「{keyword}」的任何变体，请特别严格审核相关性。"
         )
-        return f"""你是热点内容分析专家。请判断内容是否适合围绕关键词「{keyword}」创作爆款文章。
+        return f"""你是热点内容精准匹配专家。请判断内容是否与监控关键词【{keyword}】直接相关。
 {match_hint}
+
+评分规则：
+1. 判断是否为真实有价值的信息（排除标题党、假新闻、营销软文）
+2. 判断内容是否【直接】涉及关键词「{keyword}」：
+   - 同领域但未直接提及关键词 → 低于 40 分
+   - 间接沾边（同类产品/同领域不同主题）→ 30-50 分
+   - 直接讨论、提及或有实质关联 → 60 分以上
+   - 仅属于同一领域而无关联 → 低于 40 分
+3. keywordMentioned：内容是否直接提及「{keyword}」或其等价表述
+4. importance：对关注「{keyword}」的人而言有多重要（low/medium/high/urgent）
+5. summary：说明此内容与「{keyword}」的关联是什么（不是介绍内容本身）
+6. relevanceReason：相关性打分的理由（一句话）
 
 输出 JSON：
 {{
   "isReal": true,
   "relevance": 0,
-  "relevanceReason": "说明为什么相关或不相关",
+  "relevanceReason": "打分理由",
   "keywordMentioned": true,
   "importance": "low|medium|high|urgent",
-  "summary": "一句话中文摘要"
+  "summary": "此内容与【{keyword}】的关联：..."
 }}
 
 只输出 JSON。"""
