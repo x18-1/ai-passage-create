@@ -279,6 +279,13 @@ import {
   type SyncerPlatform,
   type SyncerTaskUpdate,
 } from '@/utils/wechatsync'
+import {
+  buildPublishSession,
+  isPublishableArticle,
+  resolveInitialArticle,
+  toArticleRecordRequest,
+  type PublishSession,
+} from '@/utils/publishPageState'
 
 const SUPPORTED_PLATFORMS: SyncerPlatform[] = [
   { type: 'weixin', title: '微信公众号', displayName: '微信公众号', home: 'https://mp.weixin.qq.com/', status: 'unknown', publishStatus: 'idle' },
@@ -332,6 +339,7 @@ const selectedArticle = ref<API.ArticleVO | null>(null)
 const selectedPlatformIds = ref<string[]>([])
 const platforms = ref<SyncerPlatform[]>(SUPPORTED_PLATFORMS.map((item) => ({ ...item })))
 const articleSyncSnapshots = ref<Record<string, ArticleSyncSnapshot>>({})
+const activePublishSession = ref<PublishSession | null>(null)
 
 const draft = reactive({
   title: '',
@@ -372,11 +380,28 @@ const loadArticles = async () => {
   try {
     const res = await listArticle({ pageNum: 1, pageSize: 50, status: 'COMPLETED' })
     const records = res.data.data?.records || []
-    articles.value = records.filter((item) => item.status === 'COMPLETED' && (item.fullContent || item.content))
-    if (!selectedArticle.value && articles.value.length > 0) {
+    articles.value = records.filter(isPublishableArticle)
+    if (!selectedArticle.value) {
       const routeTaskId = typeof route.query.taskId === 'string' ? route.query.taskId : ''
-      const initialArticle = articles.value.find((item) => item.taskId === routeTaskId) || articles.value[0]
-      await selectArticle(initialArticle)
+      let routeArticle: API.ArticleVO | undefined
+
+      if (routeTaskId && !articles.value.some((item) => item.taskId === routeTaskId)) {
+        try {
+          const detailRes = await getArticle({ taskId: routeTaskId })
+          const detail = detailRes.data.data
+          if (isPublishableArticle(detail)) {
+            routeArticle = detail
+            articles.value = [detail, ...articles.value]
+          }
+        } catch (error) {
+          console.error('加载指定发布文章失败:', error)
+        }
+      }
+
+      const initialArticle = resolveInitialArticle(articles.value, routeArticle, routeTaskId)
+      if (initialArticle) {
+        await selectArticle(initialArticle)
+      }
     }
   } catch (error) {
     message.error((error as Error).message || '加载文章失败')
@@ -437,34 +462,19 @@ const toPublishStatus = (status?: API.ArticleSyncRecordVO['status']) => {
   return 'idle' as const
 }
 
-const toRecordStatus = (status: SyncerPlatform['publishStatus']): API.ArticleSyncRecordUpsertRequest['status'] => {
-  if (status === 'success') return 'DRAFT_CREATED'
-  if (status === 'failed') return 'FAILED'
-  if (status === 'syncing') return 'SYNCING'
-  return undefined
-}
+const persistSyncRecord = (platform: SyncerPlatform, session = activePublishSession.value) => {
+  const request = toArticleRecordRequest(platform, session)
+  if (!request) return
 
-const persistSyncRecord = (platform: SyncerPlatform) => {
-  const taskId = selectedArticle.value?.taskId
-  const status = toRecordStatus(platform.publishStatus)
-  if (!taskId || !status) return
-
-  upsertArticleSyncRecord({
-    taskId,
-    platform: platform.type,
-    platformName: platform.displayName || platform.title,
-    status,
-    draftLink: platform.draftLink,
-    errorMessage: platform.error,
-  }).catch((error) => {
+  upsertArticleSyncRecord(request).catch((error) => {
     console.error('保存草稿同步记录失败:', error)
   })
 }
 
-const persistSelectedSyncingRecords = () => {
+const persistSelectedSyncingRecords = (session: PublishSession, platformIds: string[]) => {
   platforms.value
-    .filter((platform) => selectedPlatformIds.value.includes(platform.type) && platform.publishStatus === 'syncing')
-    .forEach(persistSyncRecord)
+    .filter((platform) => platformIds.includes(platform.type) && platform.publishStatus === 'syncing')
+    .forEach((platform) => persistSyncRecord(platform, session))
 }
 
 const clonePlatforms = (items: SyncerPlatform[]) => items.map((item) => ({ ...item }))
@@ -480,13 +490,33 @@ const resetPublishState = (platform: SyncerPlatform): SyncerPlatform => ({
 const saveCurrentArticleSyncState = () => {
   const taskId = selectedArticle.value?.taskId
   if (!taskId) return
+  saveArticleSyncState(taskId, platforms.value, selectedPlatformIds.value)
+}
+
+const saveArticleSyncState = (taskId: string, nextPlatforms: SyncerPlatform[], nextSelectedPlatformIds: string[]) => {
   articleSyncSnapshots.value = {
     ...articleSyncSnapshots.value,
     [taskId]: {
-      platforms: clonePlatforms(platforms.value),
-      selectedPlatformIds: [...selectedPlatformIds.value],
+      platforms: clonePlatforms(nextPlatforms),
+      selectedPlatformIds: [...nextSelectedPlatformIds],
     },
   }
+}
+
+const updateSessionPlatforms = (
+  session: PublishSession,
+  updater: (platform: SyncerPlatform) => SyncerPlatform,
+) => {
+  if (selectedArticle.value?.taskId === session.taskId) {
+    platforms.value = platforms.value.map(updater)
+    saveCurrentArticleSyncState()
+    return
+  }
+
+  const snapshot = articleSyncSnapshots.value[session.taskId]
+  if (!snapshot) return
+  const nextPlatforms = snapshot.platforms.map(updater)
+  saveArticleSyncState(session.taskId, nextPlatforms, snapshot.selectedPlatformIds)
 }
 
 const restoreArticleSyncState = (taskId: string) => {
@@ -580,15 +610,19 @@ const togglePlatform = (type: string) => {
 
 const publishSelected = async () => {
   if (!canPublish.value) return
-  const selectedAccounts = platforms.value.filter((item) => selectedPlatformIds.value.includes(item.type) && item.status === 'authenticated')
-    publishing.value = true
+  const publishSession = buildPublishSession(selectedArticle.value?.taskId)
+  if (!publishSession) return
+  const publishSelectedPlatformIds = [...selectedPlatformIds.value]
+  activePublishSession.value = publishSession
+  const selectedAccounts = platforms.value.filter((item) => publishSelectedPlatformIds.includes(item.type) && item.status === 'authenticated')
+  publishing.value = true
   activeTab.value = 'drafts'
   platforms.value = platforms.value.map((item) => {
-    if (!selectedPlatformIds.value.includes(item.type)) return item
+    if (!publishSelectedPlatformIds.includes(item.type)) return item
     return { ...item, publishStatus: 'syncing', message: '准备同步...', error: undefined, draftLink: undefined }
   })
   saveCurrentArticleSyncState()
-  persistSelectedSyncingRecords()
+  persistSelectedSyncingRecords(publishSession, publishSelectedPlatformIds)
 
   try {
     await publishWithWechatsync(
@@ -598,46 +632,47 @@ const publishSelected = async () => {
         cover: draft.cover || undefined,
       },
       selectedAccounts,
-      applyTaskUpdate,
+      (task) => applyTaskUpdate(task, publishSession),
     )
     message.success('同步任务已提交，请查看平台状态')
   } catch (error) {
     const errorMessage = (error as Error).message || '同步失败'
-    platforms.value = platforms.value.map((item) => {
-      if (!selectedPlatformIds.value.includes(item.type) || item.publishStatus !== 'syncing') return item
+    updateSessionPlatforms(publishSession, (item) => {
+      if (!publishSelectedPlatformIds.includes(item.type) || item.publishStatus !== 'syncing') return item
       return { ...item, publishStatus: 'failed', error: errorMessage, message: undefined }
     })
-    saveCurrentArticleSyncState()
     message.error(errorMessage)
   } finally {
     publishing.value = false
+    if (activePublishSession.value?.taskId === publishSession.taskId) {
+      activePublishSession.value = null
+    }
   }
 }
 
-const applyTaskUpdate = (task: SyncerTaskUpdate) => {
+const applyTaskUpdate = (task: SyncerTaskUpdate, session: PublishSession) => {
   if (!task.accounts) return
   const updateMap = new Map(task.accounts.map((account) => [account.type, account]))
-  platforms.value = platforms.value.map((platform) => {
+  updateSessionPlatforms(session, (platform) => {
     const update = updateMap.get(platform.type)
     if (!update) return platform
     if (update.status === 'done') {
       const next = { ...platform, publishStatus: 'success' as const, message: undefined, error: undefined, draftLink: update.editResp?.draftLink }
-      persistSyncRecord(next)
+      persistSyncRecord(next, session)
       return next
     }
     if (update.status === 'failed') {
       const next = { ...platform, publishStatus: 'failed' as const, message: undefined, error: update.error || '同步失败', draftLink: undefined }
-      persistSyncRecord(next)
+      persistSyncRecord(next, session)
       return next
     }
     if (update.status === 'uploading' || update.status === 'pending') {
       const next = { ...platform, publishStatus: 'syncing' as const, message: update.msg || '同步中...', error: undefined }
-      persistSyncRecord(next)
+      persistSyncRecord(next, session)
       return next
     }
     return platform
   })
-  saveCurrentArticleSyncState()
 }
 
 const addTag = () => {
