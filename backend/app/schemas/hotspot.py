@@ -123,7 +123,7 @@ class HotspotRadarRequest(BaseModel):
 
     keyword: str = Field(..., min_length=1, max_length=100)
     sources: list[HotspotSource] = Field(
-        default_factory=lambda: ["weibo", "bilibili", "sogou", "bing", "hackernews", "twitter", "google", "duckduckgo"]
+        default_factory=lambda: ["weibo", "bilibili", "sogou", "bing", "hackernews", "twitter", "duckduckgo"]
     )
     analyze_limit: int = Field(default=20, ge=1, le=30, alias="analyzeLimit")
 

@@ -158,7 +158,16 @@
           </article>
         </div>
 
-        <a-empty v-else :description="radarLoading ? '正在扫描热点...' : '输入关键词后扫描热点雷达'" />
+        <div v-if="radarLoading" class="scan-progress">
+          <a-spin />
+          <span>{{ stageMessage || '正在扫描热点...' }}</span>
+          <div v-if="Object.keys(sourceProgress).length" class="source-progress">
+            <a-tag v-for="(count, source) in sourceProgress" :key="source" :color="sourceColor(source as API.HotspotSource)">
+              {{ sourceLabel(source as API.HotspotSource) }} {{ count }}条
+            </a-tag>
+          </div>
+        </div>
+        <a-empty v-else-if="!filteredHotspots.length" description="输入关键词后扫描热点雷达" />
       </a-tab-pane>
 
       <a-tab-pane key="suggestions" tab="生成选题">
@@ -237,7 +246,7 @@ import {
   ThunderboltOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
-import { generateHotspotTopicSuggestions, scanHotspotRadar } from '@/api/hotspotController'
+import { generateHotspotTopicSuggestions } from '@/api/hotspotController'
 
 // 持久化到 sessionStorage，刷新页面后恢复；关闭标签页自动清除
 function useSessionRef<T>(key: string, defaultValue: T) {
@@ -265,8 +274,8 @@ const sourceOptions: Array<{ label: string; value: API.HotspotSource }> = [
   { label: 'Bing', value: 'bing' },
   { label: 'Hacker News', value: 'hackernews' },
   { label: 'Twitter/X', value: 'twitter' },
-  { label: 'Google', value: 'google' },
   { label: 'DuckDuckGo', value: 'duckduckgo' },
+  { label: 'Google（易受限）', value: 'google' },
 ]
 
 const sortOptions = [
@@ -288,6 +297,8 @@ const sortBy = useSessionRef('hotspot-sort-by', 'heat')
 
 const radarLoading = ref(false)
 const suggestionLoading = ref(false)
+const stageMessage = ref('')
+const sourceProgress = ref<Record<string, number>>({})
 const sourceFilter = ref<API.HotspotSource | undefined>()
 const importanceFilter = ref<API.HotspotVO['importance'] | undefined>()
 
@@ -337,28 +348,104 @@ const scanRadar = async () => {
   }
 
   radarLoading.value = true
+  stageMessage.value = '准备扫描...'
+  sourceProgress.value = {}
+  radarResult.value = {
+    keyword: value,
+    hotspots: [],
+    stats: { total: 0, today: 0, urgent: 0, highRelevance: 0, sourceCount: 0 },
+    expandedKeywords: [],
+    failedSources: [],
+    failedSourceDetails: [],
+    diagnostics: [],
+  }
+  selectedHotspotUrls.value = []
+  suggestionResult.value = null
+  activeTab.value = 'radar'
+
   try {
-    const res = await scanHotspotRadar({
-      keyword: value,
-      sources: selectedSources.value,
-      analyzeLimit: 20,
-    }, { timeout: 120000 })
-    radarResult.value = res.data.data || null
-    selectedHotspotUrls.value = []
-    suggestionResult.value = null
-    activeTab.value = 'radar'
-    if (!radarResult.value?.hotspots?.length) {
-      message.warning('暂未扫描到可用热点，可以换个关键词或数据源重试')
-    } else {
-      message.success(`扫描到 ${radarResult.value.hotspots.length} 条热点`)
+    const response = await fetch('/api/hotspot/radar/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ keyword: value, sources: selectedSources.value, analyzeLimit: 20 }),
+      credentials: 'include',
+    })
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}))
+      throw new Error(err?.message || `HTTP ${response.status}`)
     }
-  } catch (error: any) {
-    const errorMessage = error?.code === 'ECONNABORTED'
-      ? '扫描热点超时，请减少数据源或稍后重试'
-      : error?.response?.data?.message || error?.message || '扫描热点失败'
-    message.error(errorMessage)
+    if (!response.body) throw new Error('No response body')
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value: chunk } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(chunk, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue
+        try {
+          const event = JSON.parse(line.slice(6))
+          handleRadarEvent(event)
+        } catch {
+          // ignore malformed lines
+        }
+      }
+    }
+  } catch (err: any) {
+    message.error(err?.message || '扫描热点失败')
+    if (!radarResult.value?.hotspots?.length) radarResult.value = null
   } finally {
     radarLoading.value = false
+    stageMessage.value = ''
+  }
+}
+
+const handleRadarEvent = (event: any) => {
+  switch (event.type) {
+    case 'stage':
+      stageMessage.value = event.message
+      break
+    case 'source_done':
+      sourceProgress.value = { ...sourceProgress.value, [event.source]: event.count }
+      break
+    case 'source_error':
+      if (radarResult.value) {
+        radarResult.value.failedSources = [...(radarResult.value.failedSources || []), event.source]
+        radarResult.value.failedSourceDetails = [
+          ...(radarResult.value.failedSourceDetails || []),
+          { source: event.source, error: event.error },
+        ]
+      }
+      break
+    case 'hotspot':
+      if (radarResult.value) {
+        radarResult.value.hotspots = [...radarResult.value.hotspots, event.hotspot]
+      }
+      break
+    case 'complete':
+      if (radarResult.value) {
+        radarResult.value.stats = event.stats
+        radarResult.value.expandedKeywords = event.expandedKeywords
+        radarResult.value.failedSources = event.failedSources
+        radarResult.value.failedSourceDetails = event.failedSourceDetails
+      }
+      if (!radarResult.value?.hotspots?.length) {
+        message.warning('暂未扫描到可用热点，可以换个关键词或数据源重试')
+      } else {
+        message.success(`扫描完成，共 ${radarResult.value.hotspots.length} 条热点`)
+      }
+      break
+    case 'error':
+      message.error(event.message || '扫描热点失败')
+      break
   }
 }
 
@@ -715,6 +802,23 @@ const formatNumber = (value: number) => {
 .source-list em {
   color: var(--color-text-secondary);
   font-style: normal;
+}
+
+.scan-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 48px 24px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.source-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
 }
 
 @media (max-width: 900px) {

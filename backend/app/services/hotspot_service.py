@@ -1,8 +1,11 @@
 """热点选题编排服务"""
 
+import asyncio
+import json
 import logging
 from time import perf_counter
-from datetime import datetime
+from datetime import datetime, timedelta
+from typing import AsyncIterator
 
 from openai import AsyncOpenAI
 
@@ -15,6 +18,8 @@ from app.schemas.hotspot import (
     HotspotRadarResponse,
     HotspotRadarStatsVO,
     HotspotRawItem,
+    HotspotSource,
+    HotspotSourceFailureVO,
     HotspotTopicSuggestionRequest,
     HotspotTopicSuggestionResponse,
     HotspotVO,
@@ -189,6 +194,118 @@ class HotspotService:
             failedSourceDetails=failed_source_details,
             diagnostics=diagnostics,
         )
+
+    async def stream_radar(self, request: HotspotRadarRequest) -> AsyncIterator[str]:
+        """流式扫描热点雷达，逐条推送 SSE 事件"""
+        keyword = request.keyword.strip()
+
+        def sse(event_type: str, payload: dict) -> str:
+            return f"data: {json.dumps({'type': event_type, **payload}, ensure_ascii=False)}\n\n"
+
+        # 1. 关键词扩展
+        yield sse("stage", {"message": "关键词扩展中..."})
+        expanded_keywords = await self.analysis_service.expand_keyword(keyword)
+        yield sse("stage", {"message": f"关键词扩展完成，共 {len(expanded_keywords)} 个"})
+
+        # 2. 账号检测
+        account_items, _ = await self.source_service.detect_and_fetch_account(keyword)
+
+        # 3. 并发抓取各来源，每完成一个立即推送
+        source_map = {
+            "bing": self.source_service.search_bing,
+            "hackernews": self.source_service.search_hackernews,
+            "sogou": self.source_service.search_sogou,
+            "bilibili": self.source_service.search_bilibili,
+            "weibo": self.source_service.search_weibo,
+            "twitter": self.source_service.search_twitter,
+            "google": self.source_service.search_google,
+            "duckduckgo": self.source_service.search_duckduckgo,
+        }
+        done_queue: asyncio.Queue = asyncio.Queue()
+
+        async def fetch_one(source: str) -> None:
+            result = await self.source_service._run_source(source, source_map[source](keyword))
+            await done_queue.put(result)
+
+        active_sources = [s for s in request.sources if s in source_map]
+        tasks = [asyncio.create_task(fetch_one(s)) for s in active_sources]
+
+        all_items: list[HotspotRawItem] = list(account_items)
+        failed_sources: list[str] = []
+        failure_details: list[HotspotSourceFailureVO] = []
+
+        for _ in range(len(tasks)):
+            source, items, error = await done_queue.get()
+            if error:
+                failed_sources.append(source)
+                failure_details.append(HotspotSourceFailureVO(source=source, error=error))
+                yield sse("source_error", {"source": source, "error": error})
+            else:
+                all_items.extend(items)
+                yield sse("source_done", {"source": source, "count": len(items)})
+
+        # 4. 去重 + 优先级排序 + 配额
+        unique_items = self.analysis_service.deduplicate_results(all_items)
+        prioritized = self.analysis_service.prioritize_for_analysis(unique_items, expanded_keywords)
+
+        TWITTER_QUOTA = 15
+        OTHER_QUOTA = 10
+        items_for_analysis: list[HotspotRawItem] = []
+        twitter_count = 0
+        other_count = 0
+        for item in prioritized:
+            if item.source == "twitter":
+                if twitter_count < TWITTER_QUOTA:
+                    items_for_analysis.append(item)
+                    twitter_count += 1
+            else:
+                if other_count < OTHER_QUOTA:
+                    items_for_analysis.append(item)
+                    other_count += 1
+            if twitter_count >= TWITTER_QUOTA and other_count >= OTHER_QUOTA:
+                break
+
+        yield sse("stage", {"message": f"AI 分析中，共 {len(items_for_analysis)} 条..."})
+
+        # 5. AI 分析：每完成一条就 yield（通过 asyncio.Queue 收集）
+        analyze_queue: asyncio.Queue = asyncio.Queue()
+        semaphore = asyncio.Semaphore(3)
+        cutoff = datetime.now() - timedelta(days=7)
+
+        async def analyze_one(item: HotspotRawItem) -> None:
+            full_text = f"{item.title}\n{item.content}"
+            pre_match = self.analysis_service.pre_match_keyword(full_text, expanded_keywords)
+            async with semaphore:
+                item.analysis = await self.analysis_service.analyze_content(full_text, keyword, pre_match)
+            self.analysis_service._apply_pre_match_floor(item.analysis, pre_match)
+            await analyze_queue.put(item)
+
+        analyze_tasks = [asyncio.create_task(analyze_one(item)) for item in items_for_analysis]
+        hotspot_vos: list[HotspotVO] = []
+
+        for _ in range(len(analyze_tasks)):
+            item = await analyze_queue.get()
+            if item.published_at and item.published_at < cutoff:
+                continue
+            if not item.analysis or not item.analysis.is_real:
+                continue
+            if item.analysis.relevance < 50:
+                continue
+            if not item.analysis.keyword_mentioned and item.analysis.relevance < 65:
+                continue
+            item.heat_score = self.analysis_service.calc_hot_score(item)
+            vo = self.analysis_service.to_vo(item)
+            hotspot_vos.append(vo)
+            yield sse("hotspot", {"hotspot": vo.model_dump(by_alias=True)})
+
+        # 6. 完成
+        stats = self._build_stats(hotspot_vos)
+        yield sse("complete", {
+            "stats": stats.model_dump(by_alias=True),
+            "expandedKeywords": expanded_keywords,
+            "failedSources": failed_sources,
+            "failedSourceDetails": [f.model_dump(by_alias=True) for f in failure_details],
+        })
 
     def _build_stats(self, hotspots) -> HotspotRadarStatsVO:
         today = datetime.now().date()
