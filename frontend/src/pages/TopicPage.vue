@@ -57,7 +57,18 @@
     </section>
 
     <a-tabs v-model:activeKey="activeTab" class="topic-tabs">
-      <a-tab-pane key="radar" tab="热点雷达">
+      <!-- 关键词管理 -->
+      <a-tab-pane key="keywords" tab="关键词">
+        <KeywordsTab />
+      </a-tab-pane>
+
+      <!-- 监控热点 -->
+      <a-tab-pane key="monitor" tab="监控热点">
+        <MonitorTab />
+      </a-tab-pane>
+
+      <!-- 搜索（原热点雷达） -->
+      <a-tab-pane key="radar" tab="搜索">
         <section class="stats-grid">
           <div class="stat-card">
             <span>总热点</span>
@@ -241,6 +252,8 @@ import {
   ThunderboltOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
+import KeywordsTab from './topic/KeywordsTab.vue'
+import MonitorTab from './topic/MonitorTab.vue'
 import { generateHotspotTopicSuggestions } from '@/api/hotspotController'
 
 // 持久化到 sessionStorage，刷新页面后恢复；关闭标签页自动清除
@@ -283,7 +296,7 @@ const sortOptions = [
 const keyword = useSessionRef('hotspot-keyword', '')
 const selectedSources = useSessionRef<API.HotspotSource[]>('hotspot-sources', sourceOptions.map((item) => item.value))
 const limit = useSessionRef('hotspot-limit', 5)
-const activeTab = useSessionRef('hotspot-active-tab', 'radar')
+const activeTab = useSessionRef('hotspot-active-tab', 'monitor')
 const radarResult = useSessionRef<API.HotspotRadarResponse | null>('hotspot-radar-result', null)
 const suggestionResult = useSessionRef<API.HotspotTopicSuggestionResponse | null>('hotspot-suggestion-result', null)
 const selectedHotspotUrls = useSessionRef<string[]>('hotspot-selected-urls', [])
