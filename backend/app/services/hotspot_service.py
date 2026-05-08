@@ -218,7 +218,6 @@ class HotspotService:
             "bilibili": self.source_service.search_bilibili,
             "weibo": self.source_service.search_weibo,
             "twitter": self.source_service.search_twitter,
-            "google": self.source_service.search_google,
             "duckduckgo": self.source_service.search_duckduckgo,
         }
         done_queue: asyncio.Queue = asyncio.Queue()

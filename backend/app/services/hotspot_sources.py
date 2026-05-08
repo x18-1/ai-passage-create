@@ -50,7 +50,6 @@ _bilibili_limiter = RateLimiter(2000)
 _weibo_limiter = RateLimiter(3000)
 _bing_limiter = RateLimiter(5000)
 _hackernews_limiter = RateLimiter(1000)
-_google_limiter = RateLimiter(10000)
 _duckduckgo_limiter = RateLimiter(3000)
 
 
@@ -78,7 +77,6 @@ class HotspotSourceService:
             "bilibili": self.search_bilibili,
             "weibo": self.search_weibo,
             "twitter": self.search_twitter,
-            "google": self.search_google,
             "duckduckgo": self.search_duckduckgo,
         }
         tasks = [self._run_source(source, source_map[source](keyword)) for source in sources if source in source_map]
@@ -432,34 +430,6 @@ class HotspotSourceService:
                 authorVerified=author.get("isBlueVerified"),
             ))
         return [item for item in items if item.url]
-
-    async def search_google(self, keyword: str) -> list[HotspotRawItem]:
-        await _google_limiter.wait()
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
-            response = await client.get(
-                "https://www.google.com/search",
-                params={"q": keyword, "num": 20, "hl": "en"},
-                headers={
-                    "User-Agent": get_random_user_agent(),
-                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-                    "Accept-Language": "en-US,en;q=0.5",
-                },
-            )
-            response.raise_for_status()
-        soup = BeautifulSoup(response.text, "lxml")
-        items: list[HotspotRawItem] = []
-        for element in soup.select("div.g"):
-            title_element = element.select_one("h3")
-            if not title_element:
-                continue
-            title = title_element.get_text(strip=True)
-            link_element = element.select_one("a")
-            url = link_element.get("href", "") if link_element else ""
-            snippet_element = element.select_one(".VwiC3b")
-            snippet = snippet_element.get_text(strip=True) if snippet_element else ""
-            if title and url and str(url).startswith("http"):
-                items.append(HotspotRawItem(title=title, content=snippet or title, url=str(url), source="google"))
-        return items[:20]
 
     async def search_duckduckgo(self, keyword: str) -> list[HotspotRawItem]:
         await _duckduckgo_limiter.wait()

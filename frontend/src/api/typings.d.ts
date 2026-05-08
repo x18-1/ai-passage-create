@@ -1,5 +1,5 @@
 declare namespace API {
-  type HotspotSource = 'weibo' | 'bilibili' | 'sogou' | 'bing' | 'hackernews' | 'twitter' | 'google' | 'duckduckgo'
+  type HotspotSource = 'weibo' | 'bilibili' | 'sogou' | 'bing' | 'hackernews' | 'twitter' | 'duckduckgo'
 
   type HotspotTopicSuggestionRequest = {
     keyword: string

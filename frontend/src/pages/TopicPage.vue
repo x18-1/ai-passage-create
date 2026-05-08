@@ -161,11 +161,6 @@
         <div v-if="radarLoading" class="scan-progress">
           <a-spin />
           <span>{{ stageMessage || '正在扫描热点...' }}</span>
-          <div v-if="Object.keys(sourceProgress).length" class="source-progress">
-            <a-tag v-for="(count, source) in sourceProgress" :key="source" :color="sourceColor(source as API.HotspotSource)">
-              {{ sourceLabel(source as API.HotspotSource) }} {{ count }}条
-            </a-tag>
-          </div>
         </div>
         <a-empty v-else-if="!filteredHotspots.length" description="输入关键词后扫描热点雷达" />
       </a-tab-pane>
@@ -275,7 +270,6 @@ const sourceOptions: Array<{ label: string; value: API.HotspotSource }> = [
   { label: 'Hacker News', value: 'hackernews' },
   { label: 'Twitter/X', value: 'twitter' },
   { label: 'DuckDuckGo', value: 'duckduckgo' },
-  { label: 'Google（易受限）', value: 'google' },
 ]
 
 const sortOptions = [
@@ -298,7 +292,6 @@ const sortBy = useSessionRef('hotspot-sort-by', 'heat')
 const radarLoading = ref(false)
 const suggestionLoading = ref(false)
 const stageMessage = ref('')
-const sourceProgress = ref<Record<string, number>>({})
 const sourceFilter = ref<API.HotspotSource | undefined>()
 const importanceFilter = ref<API.HotspotVO['importance'] | undefined>()
 
@@ -349,7 +342,6 @@ const scanRadar = async () => {
 
   radarLoading.value = true
   stageMessage.value = '准备扫描...'
-  sourceProgress.value = {}
   radarResult.value = {
     keyword: value,
     hotspots: [],
@@ -414,7 +406,6 @@ const handleRadarEvent = (event: any) => {
       stageMessage.value = event.message
       break
     case 'source_done':
-      sourceProgress.value = { ...sourceProgress.value, [event.source]: event.count }
       break
     case 'source_error':
       if (radarResult.value) {
@@ -508,7 +499,6 @@ const sourceColor = (source: API.HotspotSource) => {
     bing: 'cyan',
     hackernews: 'orange',
     twitter: 'purple',
-    google: 'green',
     duckduckgo: 'geekblue',
   }
   return colors[source]

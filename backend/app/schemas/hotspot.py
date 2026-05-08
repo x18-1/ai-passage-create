@@ -6,7 +6,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
-HotspotSource = Literal["weibo", "bilibili", "sogou", "bing", "hackernews", "twitter", "google", "duckduckgo"]
+HotspotSource = Literal["weibo", "bilibili", "sogou", "bing", "hackernews", "twitter", "duckduckgo"]
 HotspotImportance = Literal["low", "medium", "high", "urgent"]
 
 
