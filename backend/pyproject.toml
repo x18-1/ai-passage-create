@@ -32,7 +32,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = [
+    "pytest>=9.0.3",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
