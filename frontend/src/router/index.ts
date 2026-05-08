@@ -13,6 +13,11 @@ const router = createRouter({
       component: HomePage,
     },
     {
+      path: '/topic',
+      name: '热点选题',
+      component: () => import('@/pages/TopicPage.vue'),
+    },
+    {
       path: '/create',
       name: '创作文章',
       component: () => import('@/pages/article/ArticleCreatePage.vue'),

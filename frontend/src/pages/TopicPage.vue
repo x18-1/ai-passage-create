@@ -9,7 +9,7 @@
 
       <!-- ── Tab 2：监控热点（持久化 DB） ── -->
       <a-tab-pane key="monitor" tab="监控热点">
-        <MonitorTab />
+        <MonitorTab @generate-topics="handleGenerateTopics" />
       </a-tab-pane>
 
       <!-- ── Tab 3：搜索（按需扫描） ── -->
@@ -424,6 +424,49 @@ const toggleHotspot = (item: API.HotspotVO) => {
   } else {
     selectedHotspotUrls.value = [...selectedHotspotUrls.value, item.url]
   }
+}
+
+function handleGenerateTopics(records: API.RecordVO[]) {
+  if (records.length === 0) return
+
+  const hotspots: API.HotspotVO[] = records.map((r) => ({
+    url: r.url,
+    title: r.title,
+    summary: r.summary,
+    content: r.content,
+    importance: r.importance as API.HotspotVO['importance'],
+    source: r.source as API.HotspotSource,
+    heatScore: r.heatScore,
+    relevance: r.relevance,
+    likeCount: r.likeCount,
+    retweetCount: r.retweetCount,
+    commentCount: r.commentCount,
+    viewCount: r.viewCount,
+    publishedAt: r.publishedAt,
+    keywordMentioned: r.keywordMentioned,
+    relevanceReason: r.relevanceReason,
+    authorName: undefined,
+    isReal: r.isReal,
+  }))
+
+  // Use keyword from the first record's context, fall back to current keyword
+  if (records[0]?.keywordText) keyword.value = records[0].keywordText
+
+  // Populate radar result with these records so generateTopics can read selectedHotspots
+  radarResult.value = {
+    keyword: keyword.value || '监控热点',
+    hotspots,
+    stats: { total: hotspots.length, today: 0, urgent: 0, highRelevance: 0, sourceCount: 0 },
+    expandedKeywords: [],
+    failedSources: [],
+    failedSourceDetails: [],
+    diagnostics: [],
+  }
+  selectedHotspotUrls.value = hotspots.map((h) => h.url)
+  suggestionResult.value = null
+
+  activeTab.value = 'suggestions'
+  generateTopics()
 }
 
 const resetFilters = () => {

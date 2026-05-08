@@ -29,6 +29,13 @@
         @change="onFilterChange"
       />
       <div class="sort-right">
+        <template v-if="selectedIds.length > 0">
+          <span class="selected-count">已选 {{ selectedIds.length }} 条</span>
+          <a-button @click="selectedIds = []">取消选择</a-button>
+          <a-button type="primary" @click="doGenerateTopics">
+            生成选题
+          </a-button>
+        </template>
         <a-button type="primary" :loading="triggering" @click="doTrigger">
           立即扫描
         </a-button>
@@ -107,7 +114,18 @@
     </div>
 
     <div v-else class="record-list">
-      <article v-for="item in records" :key="item.id" class="record-card">
+      <article
+        v-for="item in records"
+        :key="item.id"
+        :class="['record-card', { selected: selectedIds.includes(item.id) }]"
+      >
+        <div class="record-check">
+          <a-checkbox
+            :checked="selectedIds.includes(item.id)"
+            @change="toggleRecord(item.id)"
+          />
+        </div>
+        <div class="record-body">
         <div class="record-tags">
           <a-tag :color="importanceColor(item.importance)">{{ importanceLabel(item.importance) }}</a-tag>
           <a-tag :color="sourceColor(item.source)">{{ sourceLabel(item.source) }}</a-tag>
@@ -143,6 +161,7 @@
             {{ item.content }}
           </a-collapse-panel>
         </a-collapse>
+        </div>
       </article>
     </div>
 
@@ -166,6 +185,10 @@ import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { listKeywords, getRecordStats, listRecords, triggerMonitor } from '@/api/hotspotMonitorController'
 import { useHotspotWs } from '@/composables/useHotspotWs'
+
+const emit = defineEmits<{
+  (e: 'generate-topics', records: API.RecordVO[]): void
+}>()
 
 const sourceOptions = [
   { label: '微博', value: 'weibo' },
@@ -193,6 +216,7 @@ const triggering = ref(false)
 const page = ref(1)
 const limit = ref(20)
 const total = ref(0)
+const selectedIds = ref<number[]>([])
 
 const filters = reactive({
   source: undefined as string | undefined,
@@ -212,6 +236,20 @@ function resetFilters() {
   filters.sortBy = 'created_at'
   page.value = 1
   loadRecords()
+}
+
+function toggleRecord(id: number) {
+  if (selectedIds.value.includes(id)) {
+    selectedIds.value = selectedIds.value.filter((x) => x !== id)
+  } else {
+    selectedIds.value = [...selectedIds.value, id]
+  }
+}
+
+function doGenerateTopics() {
+  const selected = records.value.filter((r) => selectedIds.value.includes(r.id))
+  if (selected.length === 0) { message.warning('请先勾选热点记录'); return }
+  emit('generate-topics', selected)
 }
 
 async function loadStats() {
@@ -346,6 +384,12 @@ onMounted(() => { loadStats(); loadKeywords(); loadRecords() })
   gap: 10px;
 }
 
+.selected-count {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 /* 筛选条 */
 .filter-bar {
   display: flex;
@@ -387,6 +431,22 @@ onMounted(() => { loadStats(); loadKeywords(); loadRecords() })
   border-radius: var(--radius-lg);
   padding: 20px;
   box-shadow: var(--shadow-sm);
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.record-card.selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.12);
+}
+
+.record-check {
+  padding-top: 2px;
+}
+
+.record-body {
+  min-width: 0;
 }
 
 .record-tags {
