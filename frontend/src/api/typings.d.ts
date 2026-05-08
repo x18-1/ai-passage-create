@@ -1,4 +1,96 @@
 declare namespace API {
+  type HotspotSource = 'weibo' | 'bilibili' | 'sogou' | 'bing' | 'hackernews' | 'twitter' | 'google' | 'duckduckgo'
+
+  type HotspotTopicSuggestionRequest = {
+    keyword: string
+    hotspots?: HotspotVO[]
+    limit?: number
+  }
+
+  type HotspotRadarRequest = {
+    keyword: string
+    sources?: HotspotSource[]
+    analyzeLimit?: number
+  }
+
+  type HotspotVO = {
+    title: string
+    content: string
+    url: string
+    source: HotspotSource
+    publishedAt?: string
+    heatScore: number
+    isReal: boolean
+    relevance: number
+    relevanceReason: string
+    keywordMentioned: boolean
+    importance: 'low' | 'medium' | 'high' | 'urgent'
+    summary: string
+    viewCount?: number
+    likeCount?: number
+    retweetCount?: number
+    commentCount?: number
+    authorName?: string
+  }
+
+  type TopicSuggestionVO = {
+    title: string
+    contentDescription: string
+    angle: string
+    viralReason: string
+    suitablePlatforms: string[]
+    sourceHotspotTitles: string[]
+  }
+
+  type HotspotTopicSuggestionResponse = {
+    keyword: string
+    suggestions: TopicSuggestionVO[]
+  }
+
+  type HotspotRadarStatsVO = {
+    total: number
+    today: number
+    urgent: number
+    highRelevance: number
+    sourceCount: number
+  }
+
+  type HotspotSourceFailureVO = {
+    source: HotspotSource
+    error: string
+  }
+
+  type HotspotDiagnosticVO = {
+    level: 'info' | 'warning' | 'error'
+    stage: string
+    message: string
+    source?: HotspotSource
+    count?: number
+    elapsedMs?: number
+  }
+
+  type HotspotRadarResponse = {
+    keyword: string
+    expandedKeywords: string[]
+    stats: HotspotRadarStatsVO
+    hotspots: HotspotVO[]
+    failedSources: string[]
+    failedSourceDetails: HotspotSourceFailureVO[]
+    diagnostics: HotspotDiagnosticVO[]
+  }
+
+  type BaseResponseHotspotTopicSuggestionResponse = {
+    code?: number
+    data?: HotspotTopicSuggestionResponse
+    message?: string
+  }
+
+  type BaseResponseHotspotRadarResponse = {
+    code?: number
+    data?: HotspotRadarResponse
+    message?: string
+  }
+
   type AgentExecutionStats = {
     taskId?: string
     totalDurationMs?: number
