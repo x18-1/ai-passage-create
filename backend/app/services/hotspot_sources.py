@@ -3,7 +3,6 @@
 import asyncio
 import html
 import logging
-import os
 import random
 import re
 import time as _time
@@ -11,11 +10,12 @@ import uuid
 from time import perf_counter
 from datetime import datetime, timedelta, timezone
 from typing import Callable
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
+from app.config import settings
 from app.schemas.hotspot import HotspotRawItem, HotspotSource, HotspotSourceFailureVO
 
 logger = logging.getLogger(__name__)
@@ -50,6 +50,8 @@ _bilibili_limiter = RateLimiter(2000)
 _weibo_limiter = RateLimiter(3000)
 _bing_limiter = RateLimiter(5000)
 _hackernews_limiter = RateLimiter(1000)
+_google_limiter = RateLimiter(10000)
+_duckduckgo_limiter = RateLimiter(3000)
 
 
 class HotspotSourceService:
@@ -76,6 +78,8 @@ class HotspotSourceService:
             "bilibili": self.search_bilibili,
             "weibo": self.search_weibo,
             "twitter": self.search_twitter,
+            "google": self.search_google,
+            "duckduckgo": self.search_duckduckgo,
         }
         tasks = [self._run_source(source, source_map[source](keyword)) for source in sources if source in source_map]
         results = await asyncio.gather(*tasks)
@@ -354,7 +358,7 @@ class HotspotSourceService:
         return response.json()
 
     async def search_twitter(self, keyword: str) -> list[HotspotRawItem]:
-        api_key = os.getenv("TWITTER_API_KEY")
+        api_key = settings.twitter_api_key
         if not api_key:
             return []
 
@@ -428,6 +432,66 @@ class HotspotSourceService:
                 authorVerified=author.get("isBlueVerified"),
             ))
         return [item for item in items if item.url]
+
+    async def search_google(self, keyword: str) -> list[HotspotRawItem]:
+        await _google_limiter.wait()
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            response = await client.get(
+                "https://www.google.com/search",
+                params={"q": keyword, "num": 20, "hl": "en"},
+                headers={
+                    "User-Agent": get_random_user_agent(),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                },
+            )
+            response.raise_for_status()
+        soup = BeautifulSoup(response.text, "lxml")
+        items: list[HotspotRawItem] = []
+        for element in soup.select("div.g"):
+            title_element = element.select_one("h3")
+            if not title_element:
+                continue
+            title = title_element.get_text(strip=True)
+            link_element = element.select_one("a")
+            url = link_element.get("href", "") if link_element else ""
+            snippet_element = element.select_one(".VwiC3b")
+            snippet = snippet_element.get_text(strip=True) if snippet_element else ""
+            if title and url and str(url).startswith("http"):
+                items.append(HotspotRawItem(title=title, content=snippet or title, url=str(url), source="google"))
+        return items[:20]
+
+    async def search_duckduckgo(self, keyword: str) -> list[HotspotRawItem]:
+        await _duckduckgo_limiter.wait()
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            response = await client.get(
+                "https://html.duckduckgo.com/html/",
+                params={"q": keyword},
+                headers={
+                    "User-Agent": get_random_user_agent(),
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                    "Accept-Language": "en-US,en;q=0.5",
+                },
+            )
+            response.raise_for_status()
+        soup = BeautifulSoup(response.text, "lxml")
+        items: list[HotspotRawItem] = []
+        for element in soup.select(".result"):
+            title_element = element.select_one(".result__title a")
+            if not title_element:
+                continue
+            title = title_element.get_text(strip=True)
+            raw_url = title_element.get("href", "")
+            url = str(raw_url)
+            # DuckDuckGo 使用重定向 URL，提取实际 URL
+            if "uddg=" in url:
+                qs = parse_qs(urlparse(url).query)
+                url = qs.get("uddg", [url])[0]
+            snippet_element = element.select_one(".result__snippet")
+            snippet = snippet_element.get_text(strip=True) if snippet_element else ""
+            if title and url and url.startswith("http"):
+                items.append(HotspotRawItem(title=title, content=snippet or title, url=url, source="duckduckgo"))
+        return items[:20]
 
     async def detect_and_fetch_account(self, keyword: str) -> tuple[list[HotspotRawItem], list[dict]]:
         """检测关键词是否为 B站 UP 主账号名，若匹配则拉取最新内容（优先于搜索结果）"""

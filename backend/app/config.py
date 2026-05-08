@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     agent_image_max_concurrency: int = 3
     agent_image_fail_fast: bool = True
 
+    # Twitter API（twitterapi.io）
+    twitter_api_key: str = ""
+
     # Stripe 支付配置（第 7 期新增）
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""
