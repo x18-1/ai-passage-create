@@ -63,7 +63,12 @@ class HotspotSourceService:
         keyword: str,
         sources: list[HotspotSource],
     ) -> tuple[list[HotspotRawItem], list[str], list[HotspotSourceFailureVO]]:
-        """并发搜索多个来源"""
+        """并发搜索多个来源，账号检测结果优先"""
+        # 账号检测（不算在普通来源内，失败不影响主流程）
+        account_items, detected_accounts = await self.detect_and_fetch_account(keyword)
+        if detected_accounts:
+            logger.info("B站账号检测命中 %s 个账号，获得 %s 条内容", len(detected_accounts), len(account_items))
+
         source_map: dict[str, Callable[[str], object]] = {
             "bing": self.search_bing,
             "hackernews": self.search_hackernews,
@@ -75,7 +80,7 @@ class HotspotSourceService:
         tasks = [self._run_source(source, source_map[source](keyword)) for source in sources if source in source_map]
         results = await asyncio.gather(*tasks)
 
-        items: list[HotspotRawItem] = []
+        items: list[HotspotRawItem] = list(account_items)  # 账号内容排在最前
         failed_sources: list[str] = []
         failure_details: list[HotspotSourceFailureVO] = []
         for source, result, error in results:
@@ -423,6 +428,98 @@ class HotspotSourceService:
                 authorVerified=author.get("isBlueVerified"),
             ))
         return [item for item in items if item.url]
+
+    async def detect_and_fetch_account(self, keyword: str) -> tuple[list[HotspotRawItem], list[dict]]:
+        """检测关键词是否为 B站 UP 主账号名，若匹配则拉取最新内容（优先于搜索结果）"""
+        try:
+            users = await self._search_bilibili_user(keyword)
+        except Exception as exc:
+            logger.warning("B站账号检测失败 keyword=%s error=%s", keyword, exc)
+            return [], []
+
+        keyword_lower = keyword.lower()
+        matched_accounts: list[dict] = []
+        account_items: list[HotspotRawItem] = []
+
+        for user in users:
+            uname = (user.get("uname") or "").lower()
+            followers = user.get("fans") or 0
+            if followers < 1000:
+                continue
+            if keyword_lower not in uname:
+                continue
+            mid = str(user.get("mid") or "")
+            matched_accounts.append({
+                "platform": "bilibili",
+                "name": user.get("uname"),
+                "followers": followers,
+            })
+            logger.info("B站账号检测命中 uname=%s followers=%s mid=%s", user.get("uname"), followers, mid)
+            try:
+                videos = await self._fetch_bilibili_user_videos(mid)
+                account_items.extend(videos)
+            except Exception as exc:
+                logger.warning("B站账号视频拉取失败 mid=%s error=%s", mid, exc)
+
+        return account_items, matched_accounts
+
+    async def _search_bilibili_user(self, keyword: str) -> list[dict]:
+        await _bilibili_limiter.wait()
+        headers = {
+            "User-Agent": get_random_user_agent(),
+            "Referer": "https://search.bilibili.com/",
+            "Accept": "application/json",
+            "Cookie": f"buvid3={uuid.uuid4()}infoc",
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(
+                "https://api.bilibili.com/x/web-interface/search/type",
+                params={"keyword": keyword, "search_type": "bili_user", "page": 1},
+                headers=headers,
+            )
+            response.raise_for_status()
+        data = response.json()
+        if data.get("code") != 0:
+            return []
+        return data.get("data", {}).get("result", []) or []
+
+    async def _fetch_bilibili_user_videos(self, mid: str) -> list[HotspotRawItem]:
+        await _bilibili_limiter.wait()
+        headers = {
+            "User-Agent": get_random_user_agent(),
+            "Referer": f"https://space.bilibili.com/{mid}/",
+            "Accept": "application/json",
+        }
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(
+                "https://api.bilibili.com/x/space/arc/search",
+                params={"mid": mid, "ps": 10, "tid": 0, "order": "pubdate"},
+                headers=headers,
+            )
+            response.raise_for_status()
+        data = response.json()
+        items: list[HotspotRawItem] = []
+        vlist = (data.get("data") or {}).get("list", {}).get("vlist") or []
+        for video in vlist:
+            title = re.sub(r"</?em[^>]*>", "", html.unescape(video.get("title") or ""))
+            bvid = video.get("bvid")
+            if not title or not bvid:
+                continue
+            items.append(HotspotRawItem(
+                title=title,
+                content=video.get("description") or title,
+                url=f"https://www.bilibili.com/video/{bvid}",
+                source="bilibili",
+                sourceId=bvid,
+                publishedAt=self._from_timestamp(video.get("created")),
+                viewCount=video.get("play") or 0,
+                likeCount=video.get("like") or 0,
+                commentCount=video.get("comment") or 0,
+                danmakuCount=video.get("danmaku") or 0,
+                authorName=video.get("author"),
+                authorUsername=mid,
+            ))
+        return items
 
     def _parse_datetime(self, value: str | None) -> datetime | None:
         if not value:
