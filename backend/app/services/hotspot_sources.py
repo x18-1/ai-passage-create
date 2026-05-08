@@ -287,46 +287,141 @@ class HotspotSourceService:
             )
         return items
 
+    # Twitter 本地过滤阈值
+    _TWITTER_MIN_LIKES = 10
+    _TWITTER_MIN_RETWEETS = 5
+    _TWITTER_MIN_VIEWS = 500
+    _TWITTER_MIN_FOLLOWERS = 100
+
+    def _filter_and_rank_tweets(self, tweets: list[dict]) -> list[dict]:
+        """本地质量过滤 + 按质量评分排序（在 AI 分析之前执行，减少无效调用）"""
+        filtered = []
+        for tweet in tweets:
+            text = tweet.get("text") or ""
+            tweet_type = (tweet.get("type") or "").lower()
+            author = tweet.get("author") or {}
+            verified = bool(author.get("isBlueVerified"))
+            factor = 0.5 if verified else 1.0
+
+            if "reply" in tweet_type:
+                continue
+            if re.match(r"^@\w+\s", text.strip()):
+                continue
+            if (tweet.get("likeCount") or 0) < self._TWITTER_MIN_LIKES * factor:
+                continue
+            if (tweet.get("retweetCount") or 0) < self._TWITTER_MIN_RETWEETS * factor:
+                continue
+            if (tweet.get("viewCount") or 0) < self._TWITTER_MIN_VIEWS * factor:
+                continue
+            if (author.get("followers") or 0) < self._TWITTER_MIN_FOLLOWERS * factor:
+                continue
+            filtered.append(tweet)
+
+        filtered.sort(
+            key=lambda t: (
+                (t.get("likeCount") or 0) * 2
+                + (t.get("retweetCount") or 0) * 3
+                + (t.get("viewCount") or 0) / 100
+                + (50 if (t.get("author") or {}).get("isBlueVerified") else 0)
+            ),
+            reverse=True,
+        )
+        return filtered
+
+    def _build_twitter_query(self, keyword: str, query_type: str) -> str:
+        days_ago = 7 if query_type == "Top" else 3
+        parts = [keyword, "-filter:retweets", "-filter:replies", f"since:{self._format_since_date(days_ago)}"]
+        if query_type == "Top":
+            parts.append("min_faves:10")
+        return " ".join(parts)
+
+    async def _fetch_tweet_page(self, query: str, query_type: str, api_key: str, cursor: str | None = None) -> dict:
+        params: dict[str, str] = {"query": query, "queryType": query_type}
+        if cursor:
+            params["cursor"] = cursor
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            response = await client.get(
+                "https://api.twitterapi.io/twitter/tweet/advanced_search",
+                params=params,
+                headers={"X-API-Key": api_key, "Content-Type": "application/json"},
+            )
+            response.raise_for_status()
+        return response.json()
+
     async def search_twitter(self, keyword: str) -> list[HotspotRawItem]:
         api_key = os.getenv("TWITTER_API_KEY")
         if not api_key:
             return []
-        query = f"{keyword} -filter:retweets -filter:replies since:{self._format_since_date(7)} min_faves:10"
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.get(
-                "https://api.twitterapi.io/twitter/tweet/advanced_search",
-                params={"query": query, "queryType": "Top"},
-                headers={"X-API-Key": api_key, "Content-Type": "application/json"},
-            )
-            response.raise_for_status()
-        data = response.json()
+
+        top_query = self._build_twitter_query(keyword, "Top")
+        latest_query = self._build_twitter_query(keyword, "Latest")
+        logger.info("Twitter 查询 top=%s latest=%s", top_query, latest_query)
+
+        top_page1_coro = self._fetch_tweet_page(top_query, "Top", api_key)
+        latest_page1_coro = self._fetch_tweet_page(latest_query, "Latest", api_key)
+        top_result, latest_result = await asyncio.gather(top_page1_coro, latest_page1_coro, return_exceptions=True)
+
+        all_tweet_dicts: list[dict] = []
+        seen_ids: set[str] = set()
+
+        def add_tweets(tweets: list) -> None:
+            for tweet in tweets:
+                tid = tweet.get("id")
+                if tid and tid not in seen_ids:
+                    seen_ids.add(tid)
+                    all_tweet_dicts.append(tweet)
+
+        top_next_cursor: str | None = None
+        if isinstance(top_result, Exception):
+            logger.warning("Twitter Top 第1页失败: %s", top_result)
+        else:
+            top_data: dict = top_result
+            add_tweets(top_data.get("tweets") or [])
+            if top_data.get("has_next_page"):
+                top_next_cursor = top_data.get("next_cursor")
+
+        if isinstance(latest_result, Exception):
+            logger.warning("Twitter Latest 第1页失败: %s", latest_result)
+        else:
+            add_tweets((latest_result).get("tweets") or [])
+
+        if top_next_cursor:
+            try:
+                top_page2 = await self._fetch_tweet_page(top_query, "Top", api_key, cursor=top_next_cursor)
+                add_tweets(top_page2.get("tweets") or [])
+            except Exception as exc:
+                logger.warning("Twitter Top 第2页失败: %s", exc)
+
+        logger.info("Twitter: %s 条原始推文，开始本地过滤", len(all_tweet_dicts))
+        filtered = self._filter_and_rank_tweets(all_tweet_dicts)
+        logger.info(
+            "Twitter: %s → %s 条（likes≥%s RT≥%s views≥%s followers≥%s 排除回复）",
+            len(all_tweet_dicts), len(filtered),
+            self._TWITTER_MIN_LIKES, self._TWITTER_MIN_RETWEETS,
+            self._TWITTER_MIN_VIEWS, self._TWITTER_MIN_FOLLOWERS,
+        )
+
         items: list[HotspotRawItem] = []
-        for tweet in data.get("tweets", []) or []:
-            text = tweet.get("text") or ""
-            if not text:
-                continue
+        for tweet in filtered:
             author = tweet.get("author") or {}
-            if tweet.get("type", "").lower().find("reply") >= 0 or re.match(r"^@\w+\s", text.strip()):
-                continue
-            items.append(
-                HotspotRawItem(
-                    title=text[:100],
-                    content=text,
-                    url=tweet.get("url") or "",
-                    source="twitter",
-                    sourceId=tweet.get("id"),
-                    publishedAt=self._parse_datetime(tweet.get("createdAt")),
-                    viewCount=tweet.get("viewCount") or 0,
-                    likeCount=tweet.get("likeCount") or 0,
-                    retweetCount=tweet.get("retweetCount") or 0,
-                    replyCount=tweet.get("replyCount") or 0,
-                    quoteCount=tweet.get("quoteCount") or 0,
-                    authorName=author.get("name"),
-                    authorUsername=author.get("userName"),
-                    authorFollowers=author.get("followers"),
-                    authorVerified=author.get("isBlueVerified"),
-                )
-            )
+            text = tweet.get("text") or ""
+            items.append(HotspotRawItem(
+                title=text[:100],
+                content=text,
+                url=tweet.get("url") or "",
+                source="twitter",
+                sourceId=tweet.get("id"),
+                publishedAt=self._parse_datetime(tweet.get("createdAt")),
+                viewCount=tweet.get("viewCount") or 0,
+                likeCount=tweet.get("likeCount") or 0,
+                retweetCount=tweet.get("retweetCount") or 0,
+                replyCount=tweet.get("replyCount") or 0,
+                quoteCount=tweet.get("quoteCount") or 0,
+                authorName=author.get("name"),
+                authorUsername=author.get("userName"),
+                authorFollowers=author.get("followers"),
+                authorVerified=author.get("isBlueVerified"),
+            ))
         return [item for item in items if item.url]
 
     def _parse_datetime(self, value: str | None) -> datetime | None:
