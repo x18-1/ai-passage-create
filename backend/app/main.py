@@ -1,5 +1,6 @@
 """FastAPI 主应用入口"""
 
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,36 +8,53 @@ from fastapi.responses import JSONResponse
 
 from app.config import settings
 from app.database import database
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from app.routers import (
     user_router,
     health_router,
     article_router,
     article_sync_router,
+    hotspot_router,
+    hotspot_monitor_router,
     payment_router,
     webhook_router,
     statistics_router,
 )
+from app.services.hotspot_monitor_service import monitor_service
 from app.exceptions import BusinessException, ErrorCode
 from app.utils.session import init_redis, close_redis
 
 
-
-
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s:%(name)s:%(message)s",
+)
+logging.getLogger("app").setLevel(logging.INFO)
 
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    # 启动时执行
     await database.connect()
     await init_redis()
     print(f"数据库连接成功: {settings.database_url}")
     print(f"Redis 连接成功: {settings.redis_url}")
-    
+
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(
+        monitor_service.scan_all_keywords,
+        "interval",
+        minutes=30,
+        id="hotspot_scan",
+        max_instances=1,
+    )
+    scheduler.start()
+    print("热点监控调度器已启动（每30分钟）")
+
     yield
-    
-    # 关闭时执行
+
+    scheduler.shutdown(wait=False)
     await database.disconnect()
     await close_redis()
     print("应用已关闭")
@@ -93,6 +111,8 @@ app.include_router(health_router, prefix="/api")
 app.include_router(user_router, prefix="/api")
 app.include_router(article_router, prefix="/api")
 app.include_router(article_sync_router, prefix="/api")
+app.include_router(hotspot_router, prefix="/api")
+app.include_router(hotspot_monitor_router, prefix="/api")
 app.include_router(payment_router, prefix="/api")
 app.include_router(webhook_router, prefix="/api")
 app.include_router(statistics_router, prefix="/api")
