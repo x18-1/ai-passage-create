@@ -1,35 +1,22 @@
 <template>
   <div class="topic-page">
-    <section class="topic-hero">
-      <div>
-        <h1>热点选题</h1>
-        <p>先扫描热点雷达，勾选值得写的热点，再生成可复制到创作页的选题。</p>
-      </div>
-      <a-space>
-        <a-button size="large" :loading="radarLoading" :disabled="!keyword.trim()" @click="scanRadar">
-          <template #icon>
-            <RadarChartOutlined />
-          </template>
-          扫描热点
-        </a-button>
-        <a-button
-          type="primary"
-          size="large"
-          :loading="suggestionLoading"
-          :disabled="selectedHotspotUrls.length === 0"
-          @click="activeTab = 'suggestions'; generateTopics()"
-        >
-          <template #icon>
-            <ThunderboltOutlined />
-          </template>
-          基于已选生成
-        </a-button>
-      </a-space>
-    </section>
+    <a-tabs v-model:activeKey="activeTab" class="topic-tabs">
 
-    <section class="query-panel">
-      <a-form layout="vertical">
-        <a-form-item label="关键词">
+      <!-- ── Tab 1：关键词管理 ── -->
+      <a-tab-pane key="keywords" tab="关键词">
+        <KeywordsTab />
+      </a-tab-pane>
+
+      <!-- ── Tab 2：监控热点（持久化 DB） ── -->
+      <a-tab-pane key="monitor" tab="监控热点">
+        <MonitorTab />
+      </a-tab-pane>
+
+      <!-- ── Tab 3：搜索（按需扫描） ── -->
+      <a-tab-pane key="radar" tab="搜索">
+
+        <!-- 搜索输入区 -->
+        <section class="search-panel">
           <a-input-search
             v-model:value="keyword"
             size="large"
@@ -38,57 +25,30 @@
             :loading="radarLoading"
             @search="scanRadar"
           />
-        </a-form-item>
-
-        <div class="query-options">
-          <a-form-item label="数据源">
-            <a-checkbox-group v-model:value="selectedSources">
-              <a-checkbox v-for="source in sourceOptions" :key="source.value" :value="source.value">
-                {{ source.label }}
-              </a-checkbox>
-            </a-checkbox-group>
-          </a-form-item>
-
-          <a-form-item label="选题数量">
-            <a-input-number v-model:value="limit" :min="1" :max="10" />
-          </a-form-item>
-        </div>
-      </a-form>
-    </section>
-
-    <a-tabs v-model:activeKey="activeTab" class="topic-tabs">
-      <!-- 关键词管理 -->
-      <a-tab-pane key="keywords" tab="关键词">
-        <KeywordsTab />
-      </a-tab-pane>
-
-      <!-- 监控热点 -->
-      <a-tab-pane key="monitor" tab="监控热点">
-        <MonitorTab />
-      </a-tab-pane>
-
-      <!-- 搜索（原热点雷达） -->
-      <a-tab-pane key="radar" tab="搜索">
-        <section class="stats-grid">
-          <div class="stat-card">
-            <span>总热点</span>
-            <strong>{{ stats.total }}</strong>
-          </div>
-          <div class="stat-card accent">
-            <span>今日新增</span>
-            <strong>{{ stats.today }}</strong>
-          </div>
-          <div class="stat-card danger">
-            <span>紧急热点</span>
-            <strong>{{ stats.urgent }}</strong>
-          </div>
-          <div class="stat-card success">
-            <span>高相关</span>
-            <strong>{{ stats.highRelevance }}</strong>
+          <div class="search-options">
+            <div class="source-group">
+              <span class="option-label">数据源</span>
+              <a-checkbox-group v-model:value="selectedSources">
+                <a-checkbox v-for="source in sourceOptions" :key="source.value" :value="source.value">
+                  {{ source.label }}
+                </a-checkbox>
+              </a-checkbox-group>
+            </div>
+            <div class="limit-group">
+              <span class="option-label">选题数量</span>
+              <a-input-number v-model:value="limit" :min="1" :max="10" size="small" />
+            </div>
           </div>
         </section>
 
-        <section class="radar-toolbar">
+        <!-- 扫描进度 -->
+        <div v-if="radarLoading" class="scan-progress">
+          <a-spin />
+          <span>{{ stageMessage || '正在扫描热点...' }}</span>
+        </div>
+
+        <!-- 结果工具栏（有结果后才显示） -->
+        <section v-if="radarResult" class="radar-toolbar">
           <a-segmented v-model:value="sortBy" :options="sortOptions" />
           <a-select v-model:value="sourceFilter" allow-clear placeholder="来源" class="filter-select">
             <a-select-option v-for="source in sourceOptions" :key="source.value" :value="source.value">
@@ -103,8 +63,18 @@
           </a-select>
           <a-button @click="resetFilters">重置</a-button>
           <span class="selected-count">已选 {{ selectedHotspotUrls.length }} 条</span>
+          <a-button
+            v-if="selectedHotspotUrls.length > 0"
+            type="primary"
+            :loading="suggestionLoading"
+            @click="activeTab = 'suggestions'; generateTopics()"
+          >
+            <template #icon><ThunderboltOutlined /></template>
+            基于已选生成
+          </a-button>
         </section>
 
+        <!-- 失败来源警告 -->
         <a-alert
           v-if="radarResult?.failedSources?.length"
           type="warning"
@@ -114,6 +84,7 @@
           :description="failureDescription"
         />
 
+        <!-- 结果列表 -->
         <div v-if="filteredHotspots.length" class="hotspot-list">
           <article
             v-for="item in filteredHotspots"
@@ -131,16 +102,10 @@
                 <a-tag color="green">可信</a-tag>
                 <a-tag color="red">热 {{ Math.round(item.heatScore) }}</a-tag>
               </div>
-
-              <h3>
-                <a :href="item.url" target="_blank" rel="noreferrer">{{ item.title }}</a>
-              </h3>
-
+              <h3><a :href="item.url" target="_blank" rel="noreferrer">{{ item.title }}</a></h3>
               <p class="summary">
-                <span>AI 摘要</span>
-                {{ item.summary || item.content }}
+                <span>AI 摘要</span>{{ item.summary || item.content }}
               </p>
-
               <div class="author-line">
                 <UserOutlined />
                 <span>{{ item.authorName || '未知作者' }}</span>
@@ -150,13 +115,11 @@
                 <span v-if="item.commentCount">评论 {{ formatNumber(item.commentCount) }}</span>
                 <span v-if="item.viewCount">浏览 {{ formatNumber(item.viewCount) }}</span>
               </div>
-
               <div class="time-line">
                 <ClockCircleOutlined />
                 <span v-if="item.publishedAt">发布 {{ formatDate(item.publishedAt) }}</span>
-                <span>抓取刚刚</span>
+                <span>刚刚发现</span>
               </div>
-
               <a-collapse ghost class="detail-collapse">
                 <a-collapse-panel key="reason" header="AI 分析理由">
                   {{ item.relevanceReason || '暂无分析理由' }}
@@ -169,29 +132,38 @@
           </article>
         </div>
 
-        <div v-if="radarLoading" class="scan-progress">
-          <a-spin />
-          <span>{{ stageMessage || '正在扫描热点...' }}</span>
-        </div>
-        <a-empty v-else-if="!filteredHotspots.length" description="输入关键词后扫描热点雷达" />
+        <a-empty
+          v-else-if="!radarLoading"
+          :description="radarResult ? '当前筛选条件下无结果' : '输入关键词后点击扫描热点'"
+        />
       </a-tab-pane>
 
+      <!-- ── Tab 4：生成选题 ── -->
       <a-tab-pane key="suggestions" tab="生成选题">
         <section class="suggestion-panel">
           <div class="section-header">
             <div>
-              <h2>
-                <BulbOutlined />
-                选题建议
-              </h2>
-              <p>基于已选 {{ selectedHotspotUrls.length }} 条热点生成，不会重新扫描全网。</p>
+              <h2><BulbOutlined /> 选题建议</h2>
+              <p>
+                基于已选 {{ selectedHotspotUrls.length }} 条热点生成，不会重新扫描。
+                <a-button
+                  type="link"
+                  size="small"
+                  :disabled="selectedHotspotUrls.length === 0"
+                  @click="activeTab = 'radar'"
+                >
+                  返回搜索勾选热点
+                </a-button>
+              </p>
             </div>
             <a-button
               type="primary"
+              size="large"
               :loading="suggestionLoading"
               :disabled="selectedHotspotUrls.length === 0"
               @click="generateTopics"
             >
+              <template #icon><ThunderboltOutlined /></template>
               生成选题
             </a-button>
           </div>
@@ -207,9 +179,7 @@
                   </a-button>
                 </a-space>
               </div>
-
               <p class="description">{{ item.contentDescription }}</p>
-
               <div class="meta-grid">
                 <div>
                   <span>切入角度</span>
@@ -220,13 +190,11 @@
                   <strong>{{ item.viralReason }}</strong>
                 </div>
               </div>
-
               <div class="tag-line">
                 <a-tag v-for="platform in item.suitablePlatforms" :key="platform" color="green">
                   {{ platform }}
                 </a-tag>
               </div>
-
               <div class="source-list">
                 <span>参考热点：</span>
                 <em v-for="title in item.sourceHotspotTitles" :key="title">{{ title }}</em>
@@ -234,9 +202,10 @@
             </article>
           </div>
 
-          <a-empty v-else :description="suggestionLoading ? '正在生成选题...' : '请先在热点雷达中勾选热点'" />
+          <a-empty v-else :description="suggestionLoading ? '正在生成选题...' : '请先在搜索 Tab 中勾选热点'" />
         </section>
       </a-tab-pane>
+
     </a-tabs>
   </div>
 </template>
@@ -248,7 +217,6 @@ import dayjs from 'dayjs'
 import {
   BulbOutlined,
   ClockCircleOutlined,
-  RadarChartOutlined,
   ThunderboltOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
@@ -256,7 +224,6 @@ import KeywordsTab from './topic/KeywordsTab.vue'
 import MonitorTab from './topic/MonitorTab.vue'
 import { generateHotspotTopicSuggestions } from '@/api/hotspotController'
 
-// 持久化到 sessionStorage，刷新页面后恢复；关闭标签页自动清除
 function useSessionRef<T>(key: string, defaultValue: T) {
   const stored = sessionStorage.getItem(key)
   const initial: T = stored !== null ? (JSON.parse(stored) as T) : defaultValue
@@ -286,7 +253,7 @@ const sourceOptions: Array<{ label: string; value: API.HotspotSource }> = [
 ]
 
 const sortOptions = [
-  { label: '最新发现', value: 'created' },
+  { label: '最近发现', value: 'created' },
   { label: '最新发布', value: 'published' },
   { label: '重要程度', value: 'importance' },
   { label: '相关性', value: 'relevance' },
@@ -308,9 +275,10 @@ const stageMessage = ref('')
 const sourceFilter = ref<API.HotspotSource | undefined>()
 const importanceFilter = ref<API.HotspotVO['importance'] | undefined>()
 
-const stats = computed(() => radarResult.value?.stats || { total: 0, today: 0, urgent: 0, highRelevance: 0, sourceCount: 0 })
 const suggestions = computed(() => suggestionResult.value?.suggestions || [])
-const selectedHotspots = computed(() => (radarResult.value?.hotspots || []).filter((item) => selectedHotspotUrls.value.includes(item.url)))
+const selectedHotspots = computed(() =>
+  (radarResult.value?.hotspots || []).filter((item) => selectedHotspotUrls.value.includes(item.url)),
+)
 const failureDescription = computed(() => {
   const details = radarResult.value?.failedSourceDetails || []
   return details.map((item) => `${sourceLabel(item.source)}：${item.error}`).join('；')
@@ -323,35 +291,21 @@ const filteredHotspots = computed(() => {
   if (importanceFilter.value) {
     items = items.filter((item) => item.importance === importanceFilter.value)
   }
-  const importanceOrder = { urgent: 0, high: 1, medium: 2, low: 3 }
+  const importanceOrder: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 }
   items.sort((a, b) => {
-    if (sortBy.value === 'published') {
-      return new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime()
-    }
-    if (sortBy.value === 'importance') {
-      return importanceOrder[a.importance] - importanceOrder[b.importance]
-    }
-    if (sortBy.value === 'relevance') {
-      return b.relevance - a.relevance
-    }
-    if (sortBy.value === 'heat') {
-      return b.heatScore - a.heatScore
-    }
-    return 0
+    if (sortBy.value === 'created') return 0
+    if (sortBy.value === 'published') return new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime()
+    if (sortBy.value === 'importance') return (importanceOrder[a.importance] ?? 4) - (importanceOrder[b.importance] ?? 4)
+    if (sortBy.value === 'relevance') return b.relevance - a.relevance
+    return b.heatScore - a.heatScore  // heat (default)
   })
   return items
 })
 
 const scanRadar = async () => {
   const value = keyword.value.trim()
-  if (!value) {
-    message.warning('请输入关键词')
-    return
-  }
-  if (selectedSources.value.length === 0) {
-    message.warning('请至少选择一个数据源')
-    return
-  }
+  if (!value) { message.warning('请输入关键词'); return }
+  if (selectedSources.value.length === 0) { message.warning('请至少选择一个数据源'); return }
 
   radarLoading.value = true
   stageMessage.value = '准备扫描...'
@@ -375,7 +329,6 @@ const scanRadar = async () => {
       body: JSON.stringify({ keyword: value, sources: selectedSources.value, analyzeLimit: 20 }),
       credentials: 'include',
     })
-
     if (!response.ok) {
       const err = await response.json().catch(() => ({}))
       throw new Error(err?.message || `HTTP ${response.status}`)
@@ -385,23 +338,15 @@ const scanRadar = async () => {
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
-
     while (true) {
       const { done, value: chunk } = await reader.read()
       if (done) break
-
       buffer += decoder.decode(chunk, { stream: true })
       const lines = buffer.split('\n')
       buffer = lines.pop() ?? ''
-
       for (const line of lines) {
         if (!line.startsWith('data: ')) continue
-        try {
-          const event = JSON.parse(line.slice(6))
-          handleRadarEvent(event)
-        } catch {
-          // ignore malformed lines
-        }
+        try { handleRadarEvent(JSON.parse(line.slice(6))) } catch {}
       }
     }
   } catch (err: any) {
@@ -415,11 +360,8 @@ const scanRadar = async () => {
 
 const handleRadarEvent = (event: any) => {
   switch (event.type) {
-    case 'stage':
-      stageMessage.value = event.message
-      break
-    case 'source_done':
-      break
+    case 'stage': stageMessage.value = event.message; break
+    case 'source_done': break
     case 'source_error':
       if (radarResult.value) {
         radarResult.value.failedSources = [...(radarResult.value.failedSources || []), event.source]
@@ -430,9 +372,7 @@ const handleRadarEvent = (event: any) => {
       }
       break
     case 'hotspot':
-      if (radarResult.value) {
-        radarResult.value.hotspots = [...radarResult.value.hotspots, event.hotspot]
-      }
+      if (radarResult.value) radarResult.value.hotspots = [...radarResult.value.hotspots, event.hotspot]
       break
     case 'complete':
       if (radarResult.value) {
@@ -447,26 +387,20 @@ const handleRadarEvent = (event: any) => {
         message.success(`扫描完成，共 ${radarResult.value.hotspots.length} 条热点`)
       }
       break
-    case 'error':
-      message.error(event.message || '扫描热点失败')
-      break
+    case 'error': message.error(event.message || '扫描热点失败'); break
   }
 }
 
 const generateTopics = async () => {
   const value = keyword.value.trim()
-  if (!value || selectedHotspots.value.length === 0) {
-    message.warning('请先勾选热点')
-    return
-  }
+  if (!value || selectedHotspots.value.length === 0) { message.warning('请先在搜索 Tab 中勾选热点'); return }
 
   suggestionLoading.value = true
   try {
-    const res = await generateHotspotTopicSuggestions({
-      keyword: value,
-      hotspots: selectedHotspots.value,
-      limit: limit.value,
-    }, { timeout: 120000 })
+    const res = await generateHotspotTopicSuggestions(
+      { keyword: value, hotspots: selectedHotspots.value, limit: limit.value },
+      { timeout: 120000 },
+    )
     suggestionResult.value = res.data.data || null
     if (!suggestionResult.value?.suggestions?.length) {
       message.warning('暂未生成可用选题，可以调整已选热点后重试')
@@ -474,10 +408,11 @@ const generateTopics = async () => {
       message.success(`已生成 ${suggestionResult.value.suggestions.length} 个选题`)
     }
   } catch (error: any) {
-    const errorMessage = error?.code === 'ECONNABORTED'
-      ? '生成选题超时，请减少已选热点后重试'
-      : error?.response?.data?.message || error?.message || '生成选题失败'
-    message.error(errorMessage)
+    message.error(
+      error?.code === 'ECONNABORTED'
+        ? '生成选题超时，请减少已选热点后重试'
+        : error?.response?.data?.message || error?.message || '生成选题失败',
+    )
   } finally {
     suggestionLoading.value = false
   }
@@ -497,35 +432,26 @@ const resetFilters = () => {
   importanceFilter.value = undefined
 }
 
-const copyText = async (text: string, successMessage: string) => {
+const copyText = async (text: string, msg: string) => {
   await navigator.clipboard.writeText(text)
-  message.success(successMessage)
+  message.success(msg)
 }
 
-const sourceLabel = (source: API.HotspotSource) => sourceOptions.find((option) => option.value === source)?.label || source
+const sourceLabel = (source: API.HotspotSource) => sourceOptions.find((o) => o.value === source)?.label || source
 
 const sourceColor = (source: API.HotspotSource) => {
   const colors: Record<API.HotspotSource, string> = {
-    weibo: 'red',
-    bilibili: 'pink',
-    sogou: 'blue',
-    bing: 'cyan',
-    hackernews: 'orange',
-    twitter: 'purple',
-    duckduckgo: 'geekblue',
+    weibo: 'red', bilibili: 'pink', sogou: 'blue', bing: 'cyan',
+    hackernews: 'orange', twitter: 'purple', duckduckgo: 'geekblue',
   }
   return colors[source]
 }
 
-const importanceText = (importance: API.HotspotVO['importance']) => {
-  const map = { urgent: '紧急', high: '重要', medium: '中等', low: '一般' }
-  return map[importance]
-}
+const importanceText = (importance: API.HotspotVO['importance']) =>
+  ({ urgent: '紧急', high: '重要', medium: '中等', low: '一般' }[importance])
 
-const importanceColor = (importance: API.HotspotVO['importance']) => {
-  const map = { urgent: 'red', high: 'volcano', medium: 'gold', low: 'blue' }
-  return map[importance]
-}
+const importanceColor = (importance: API.HotspotVO['importance']) =>
+  ({ urgent: 'red', high: 'volcano', medium: 'gold', low: 'blue' }[importance])
 
 const formatDate = (date: string) => dayjs(date).format('MM-DD HH:mm')
 const formatNumber = (value: number) => {
@@ -542,140 +468,113 @@ const formatNumber = (value: number) => {
   padding: 24px;
 }
 
-.topic-hero,
-.query-panel,
-.stat-card,
-.radar-toolbar,
-.hotspot-card,
-.suggestion-panel,
-.suggestion-card {
-  background: #fff;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
-}
-
-.topic-hero {
-  max-width: 1400px;
-  margin: 0 auto 18px;
-  padding: 24px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-}
-
-.topic-hero h1 {
-  margin: 0;
-  color: var(--color-text);
-  font-size: 26px;
-  line-height: 1.25;
-}
-
-.topic-hero p,
-.section-header p {
-  margin: 8px 0 0;
-  color: var(--color-text-secondary);
-  font-size: 13px;
-}
-
-.query-panel,
-.topic-tabs,
-.stats-grid,
-.radar-toolbar,
-.hotspot-list,
-.suggestion-panel {
-  max-width: 1400px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.query-panel {
-  margin-bottom: 18px;
-  padding: 20px 22px 6px;
-}
-
-.query-options {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 24px;
-}
-
 .topic-tabs :deep(.ant-tabs-nav) {
   max-width: 1400px;
   margin-left: auto;
   margin-right: auto;
 }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+/* ── 搜索面板 ── */
+.search-panel {
+  max-width: 1400px;
+  margin: 0 auto 16px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 20px 22px 16px;
+}
+
+.search-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-top: 14px;
+}
+
+.source-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.limit-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.option-label {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+/* ── 扫描进度 ── */
+.scan-progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 16px;
-  margin-bottom: 16px;
-}
-
-.stat-card {
-  padding: 22px;
-}
-
-.stat-card span {
-  color: var(--color-text-muted);
+  padding: 48px 24px;
+  color: var(--color-text-secondary);
   font-size: 14px;
 }
 
-.stat-card strong {
-  display: block;
-  color: var(--color-text);
-  font-size: 34px;
-  line-height: 1.2;
-  margin-top: 12px;
-}
-
-.stat-card.accent strong {
-  color: #06b6d4;
-}
-
-.stat-card.danger strong {
-  color: #f43f5e;
-}
-
-.stat-card.success strong {
-  color: #10b981;
+/* ── 结果工具栏 ── */
+.radar-toolbar,
+.hotspot-list,
+.suggestion-panel,
+.source-alert {
+  max-width: 1400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .radar-toolbar {
-  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 12px 16px;
   margin-bottom: 16px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .filter-select {
-  width: 150px;
+  width: 130px;
 }
 
 .selected-count {
   margin-left: auto;
   color: var(--color-text-secondary);
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .source-alert {
-  max-width: 1400px;
-  margin: 0 auto 16px;
+  margin-bottom: 16px;
 }
 
-.hotspot-list,
-.suggestion-list {
+/* ── 热点卡片 ── */
+.hotspot-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 .hotspot-card {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   padding: 20px;
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
@@ -694,12 +593,20 @@ const formatNumber = (value: number) => {
   margin-bottom: 12px;
 }
 
-.hotspot-card h3,
-.suggestion-card h3 {
+.hotspot-card h3 {
   margin: 0;
   color: var(--color-text);
   font-size: 18px;
   line-height: 1.5;
+}
+
+.hotspot-card h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hotspot-card h3 a:hover {
+  color: var(--color-primary);
 }
 
 .summary {
@@ -730,12 +637,16 @@ const formatNumber = (value: number) => {
   margin-top: 12px;
 }
 
+/* ── 选题建议 ── */
 .suggestion-panel {
+  background: #fff;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
   padding: 20px;
 }
 
-.section-header,
-.suggestion-title-row {
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -752,15 +663,45 @@ const formatNumber = (value: number) => {
   gap: 8px;
 }
 
+.section-header p {
+  margin: 6px 0 0;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+}
+
+.suggestion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 .suggestion-card {
+  background: var(--color-background-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   padding: 16px;
+}
+
+.suggestion-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.suggestion-card h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .description {
   color: var(--color-text-secondary);
   font-size: 14px;
   line-height: 1.7;
-  margin: 12px 0;
+  margin: 10px 0;
 }
 
 .meta-grid {
@@ -771,7 +712,7 @@ const formatNumber = (value: number) => {
 }
 
 .meta-grid div {
-  background: var(--color-background-secondary);
+  background: #fff;
   border-radius: var(--radius-md);
   padding: 10px 12px;
 }
@@ -807,34 +748,15 @@ const formatNumber = (value: number) => {
   font-style: normal;
 }
 
-.scan-progress {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 48px 24px;
-  color: var(--color-text-secondary);
-  font-size: 14px;
-}
-
-.source-progress {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
 @media (max-width: 900px) {
-  .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .topic-hero,
-  .query-options,
+  .search-options,
   .suggestion-title-row {
     flex-direction: column;
   }
 
+  .filter-select {
+    width: 100%;
+  }
 }
 
 @media (max-width: 640px) {
@@ -842,7 +764,6 @@ const formatNumber = (value: number) => {
     padding: 12px;
   }
 
-  .stats-grid,
   .meta-grid {
     grid-template-columns: 1fr;
   }
