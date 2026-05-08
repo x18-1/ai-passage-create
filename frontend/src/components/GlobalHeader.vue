@@ -26,6 +26,35 @@
       <!-- 右侧：用户操作区域 -->
       <div class="header-right">
         <div v-if="loginUserStore.loginUser.id" class="user-dropdown">
+          <!-- 通知铃铛 -->
+          <a-popover
+            v-model:open="notifVisible"
+            trigger="click"
+            placement="bottomRight"
+            :arrow="false"
+          >
+            <template #content>
+              <div class="notif-panel">
+                <div class="notif-header">
+                  <span>通知</span>
+                  <a-button type="link" size="small" @click="doMarkAllRead">全部已读</a-button>
+                </div>
+                <div v-if="notifications.length === 0" class="notif-empty">暂无通知</div>
+                <div
+                  v-for="n in notifications"
+                  :key="n.id"
+                  :class="['notif-item', { unread: !n.isRead }]"
+                >
+                  <div class="notif-title">{{ n.title }}</div>
+                  <div v-if="n.content" class="notif-content">{{ n.content }}</div>
+                </div>
+              </div>
+            </template>
+            <a-badge :count="unreadCount" :overflow-count="99" class="notif-bell">
+              <BellOutlined class="bell-icon" />
+            </a-badge>
+          </a-popover>
+
           <!-- VIP 标识 -->
           <RouterLink v-if="!isVip" to="/vip" class="upgrade-vip-btn">
             <CrownOutlined />
@@ -67,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, h } from 'vue'
+import { computed, ref, h, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useLoginUserStore } from '@/stores/loginUser.ts'
@@ -76,13 +105,17 @@ import {
   LogoutOutlined,
   HomeOutlined,
   EditOutlined,
+  BulbOutlined,
   UnorderedListOutlined,
   SettingOutlined,
   CrownOutlined,
   BarChartOutlined,
   SendOutlined,
+  BellOutlined,
 } from '@ant-design/icons-vue'
 import { isVip as checkIsVip } from '@/utils/permission'
+import { listNotifications, markAllNotificationsRead } from '@/api/hotspotMonitorController'
+import { useHotspotWs } from '@/composables/useHotspotWs'
 
 const loginUserStore = useLoginUserStore()
 const router = useRouter()
@@ -102,6 +135,11 @@ const originItems = [
     key: '/',
     icon: HomeOutlined,
     label: '首页',
+  },
+  {
+    key: '/topic',
+    icon: BulbOutlined,
+    label: '选题',
   },
   {
     key: '/create',
@@ -142,6 +180,36 @@ const menuItems = computed(() => {
     return true
   })
 })
+
+// 通知铃铛
+const notifications = ref<API.NotificationVO[]>([])
+const unreadCount = ref(0)
+const notifVisible = ref(false)
+
+async function loadNotifications() {
+  if (!loginUserStore.loginUser.id) return
+  try {
+    const res = await listNotifications({ limit: 5 })
+    const payload = res.data?.data
+    if (payload) {
+      notifications.value = payload.notifications ?? []
+      unreadCount.value = payload.unreadCount ?? 0
+    }
+  } catch {}
+}
+
+async function doMarkAllRead() {
+  await markAllNotificationsRead()
+  unreadCount.value = 0
+  notifications.value = notifications.value.map((n) => ({ ...n, isRead: true }))
+}
+
+useHotspotWs(() => {
+  unreadCount.value++
+  loadNotifications()
+})
+
+onMounted(loadNotifications)
 
 // 退出登录
 const doLogout = async () => {
@@ -406,5 +474,74 @@ const doLogout = async () => {
   .user-name {
     display: none;
   }
+}
+
+.notif-bell {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.bell-icon {
+  font-size: 18px;
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.bell-icon:hover {
+  color: var(--color-primary);
+}
+
+.notif-panel {
+  width: 300px;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.notif-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0 8px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--color-border);
+  margin-bottom: 8px;
+}
+
+.notif-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+.notif-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+}
+
+.notif-item:last-child {
+  border-bottom: none;
+}
+
+.notif-item.unread .notif-title {
+  font-weight: 600;
+}
+
+.notif-title {
+  color: var(--color-text);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.notif-content {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>

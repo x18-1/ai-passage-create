@@ -2,19 +2,19 @@ import request from '@/request'
 
 // ─── 关键词 ───────────────────────────────────────────────
 export function listKeywords() {
-  return request.get<{ data: { data: API.KeywordVO[] } }>('/hotspot/keywords')
+  return request.get<{ code: number; data: API.KeywordVO[]; message: string }>('/hotspot/keywords')
 }
 
 export function createKeyword(params: { text: string; category?: string }) {
-  return request.post<{ data: { data: number } }>('/hotspot/keywords', params)
+  return request.post<{ code: number; data: number; message: string }>('/hotspot/keywords', params)
 }
 
 export function toggleKeyword(id: number) {
-  return request.patch<{ data: { data: boolean } }>(`/hotspot/keywords/${id}/toggle`)
+  return request.patch<{ code: number; data: boolean; message: string }>(`/hotspot/keywords/${id}/toggle`)
 }
 
 export function deleteKeyword(id: number) {
-  return request.delete<{ data: { data: boolean } }>(`/hotspot/keywords/${id}`)
+  return request.delete<{ code: number; data: boolean; message: string }>(`/hotspot/keywords/${id}`)
 }
 
 // ─── 热点记录 ─────────────────────────────────────────────
@@ -29,23 +29,23 @@ export function listRecords(params: {
   sortBy?: string
   sortOrder?: string
 }) {
-  return request.get<{ data: { data: API.RecordListResponse } }>('/hotspot/records', { params })
+  return request.get<{ code: number; data: API.RecordListResponse; message: string }>('/hotspot/records', { params })
 }
 
 export function getRecordStats() {
-  return request.get<{ data: { data: API.RecordStatsVO } }>('/hotspot/records/stats')
+  return request.get<{ code: number; data: API.RecordStatsVO; message: string }>('/hotspot/records/stats')
 }
 
 // ─── 通知 ─────────────────────────────────────────────────
 export function listNotifications(params?: { limit?: number; unreadOnly?: boolean }) {
-  return request.get<{ data: { data: API.NotificationListResponse } }>('/hotspot/notifications', { params })
+  return request.get<{ code: number; data: API.NotificationListResponse; message: string }>('/hotspot/notifications', { params })
 }
 
 export function markAllNotificationsRead() {
-  return request.patch<{ data: { data: boolean } }>('/hotspot/notifications/read-all')
+  return request.patch<{ code: number; data: boolean; message: string }>('/hotspot/notifications/read-all')
 }
 
 // ─── 监控控制 ─────────────────────────────────────────────
 export function triggerMonitor() {
-  return request.post<{ data: { data: boolean } }>('/hotspot/monitor/trigger')
+  return request.post<{ code: number; data: boolean; message: string }>('/hotspot/monitor/trigger')
 }
