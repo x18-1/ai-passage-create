@@ -465,4 +465,70 @@ declare namespace API {
     userRole?: string
     createTime?: string
   }
+
+  // ─── 热点持续监控类型 ─────────────────────────────────
+  type HotspotImportance = 'low' | 'medium' | 'high' | 'urgent'
+
+  type KeywordVO = {
+    id: number
+    text: string
+    category?: string
+    isActive: boolean
+    hotspotCount: number
+    createTime?: string
+  }
+
+  type RecordVO = {
+    id: number
+    keywordId?: number
+    keywordText?: string
+    title: string
+    content?: string
+    url: string
+    source: HotspotSource
+    isReal: boolean
+    relevance: number
+    relevanceReason?: string
+    keywordMentioned: boolean
+    importance: HotspotImportance
+    summary?: string
+    heatScore: number
+    viewCount?: number
+    likeCount?: number
+    retweetCount?: number
+    commentCount?: number
+    authorName?: string
+    publishedAt?: string
+    createTime: string
+  }
+
+  type RecordListResponse = {
+    records: RecordVO[]
+    total: number
+    page: number
+    limit: number
+    hasMore: boolean
+  }
+
+  type RecordStatsVO = {
+    total: number
+    today: number
+    urgent: number
+    activeKeywords: number
+  }
+
+  type NotificationVO = {
+    id: number
+    type: string
+    title: string
+    content?: string
+    isRead: boolean
+    hotspotRecordId?: number
+    createTime: string
+  }
+
+  type NotificationListResponse = {
+    notifications: NotificationVO[]
+    unreadCount: number
+  }
 }
