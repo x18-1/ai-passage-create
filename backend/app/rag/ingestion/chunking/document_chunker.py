@@ -71,7 +71,16 @@ class DocumentChunker:
         """
         self._settings = settings
         self._splitter = SplitterFactory.create(settings)
-    
+        self._md_splitter = None  # lazy-init
+
+    def _get_markdown_splitter(self):
+        if self._md_splitter is None:
+            try:
+                self._md_splitter = SplitterFactory.create_named("markdown", self._settings)
+            except Exception:
+                self._md_splitter = self._splitter
+        return self._md_splitter
+
     def split_document(self, document: Document) -> List[Chunk]:
         """Split a Document into Chunks with full business enrichment.
         
@@ -112,9 +121,16 @@ class DocumentChunker:
         """
         if not document.text or not document.text.strip():
             raise ValueError(f"Document {document.id} has no text content to split")
-        
-        # Step 1: Use underlying splitter to get text fragments
-        text_fragments = self._splitter.split_text(document.text)
+
+        # Choose splitter: use Markdown header splitter for .md files
+        source_path = document.metadata.get("source_path", "")
+        if source_path.endswith(".md"):
+            splitter = self._get_markdown_splitter()
+        else:
+            splitter = self._splitter
+
+        # Step 1: Use splitter to get text fragments
+        text_fragments = splitter.split_text(document.text)
         
         if not text_fragments:
             raise ValueError(

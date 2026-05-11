@@ -16,17 +16,18 @@ if TYPE_CHECKING:
 
 
 def _register_builtin_providers() -> None:
-    """Register built-in splitter providers.
-    
-    This function is called automatically when the module is imported.
-    It registers all available splitter implementations with the factory.
-    """
-    # Import here to avoid circular imports and handle missing dependencies gracefully
+    """Register built-in splitter providers."""
     try:
         from app.rag.libs.splitter.recursive_splitter import RecursiveSplitter
         SplitterFactory.register_provider("recursive", RecursiveSplitter)
     except ImportError:
-        pass  # RecursiveSplitter not available (missing langchain dependency)
+        pass
+
+    try:
+        from app.rag.libs.splitter.markdown_splitter import MarkdownSplitter
+        SplitterFactory.register_provider("markdown", MarkdownSplitter)
+    except ImportError:
+        pass
 
 
 class SplitterFactory:
@@ -102,6 +103,14 @@ class SplitterFactory:
                 f"Failed to instantiate Splitter provider '{provider_name}': {e}"
             ) from e
     
+    @classmethod
+    def create_named(cls, name: str, settings: Settings, **override_kwargs: Any) -> BaseSplitter:
+        """Create a splitter by explicit name, ignoring settings.ingestion.splitter."""
+        provider_class = cls._PROVIDERS.get(name.lower())
+        if provider_class is None:
+            raise ValueError(f"Splitter provider '{name}' not registered")
+        return provider_class(settings=settings, **override_kwargs)
+
     @classmethod
     def list_providers(cls) -> list[str]:
         """List all registered provider names.
