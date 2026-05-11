@@ -112,6 +112,7 @@ import {
   BarChartOutlined,
   SendOutlined,
   BellOutlined,
+  DatabaseOutlined,
 } from '@ant-design/icons-vue'
 import { isVip as checkIsVip } from '@/utils/permission'
 import { listNotifications, markAllNotificationsRead } from '@/api/hotspotMonitorController'
@@ -155,6 +156,11 @@ const originItems = [
     key: '/publish',
     icon: SendOutlined,
     label: '发布',
+  },
+  {
+    key: '/knowledge',
+    icon: DatabaseOutlined,
+    label: '知识',
   },
   {
     key: '/admin/userManage',

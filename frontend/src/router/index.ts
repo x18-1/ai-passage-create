@@ -33,6 +33,11 @@ const router = createRouter({
       component: () => import('@/pages/PublishPage.vue'),
     },
     {
+      path: '/knowledge',
+      name: '知识库',
+      component: () => import('@/pages/KnowledgePage.vue'),
+    },
+    {
       path: '/article/:taskId',
       name: '文章详情',
       component: () => import('@/pages/article/ArticleDetailPage.vue'),
