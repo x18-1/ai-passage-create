@@ -27,6 +27,10 @@ dependencies = [
     "stripe>=14.3.0",
     "apscheduler>=3.10",
     "pyyaml>=6.0",
+    "chromadb>=0.6.0",
+    "langchain-text-splitters>=0.3.0",
+    "jieba>=0.42",
+    "markitdown>=0.1.0",
 ]
 
 [build-system]

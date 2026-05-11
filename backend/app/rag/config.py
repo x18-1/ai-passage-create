@@ -36,7 +36,7 @@ def get_rag_settings() -> Settings:
             },
             "vector_store": {
                 "provider": "chroma",
-                "persist_directory": "./storage/rag/chroma",
+                "persist_directory": "storage/rag/chroma",
                 "collection_name": "knowledge_hub",
             },
             "retrieval": {"dense_top_k": 20, "sparse_top_k": 20, "fusion_top_k": 10, "rrf_k": 60},
@@ -45,7 +45,7 @@ def get_rag_settings() -> Settings:
             "observability": {
                 "log_level": "INFO",
                 "trace_enabled": True,
-                "trace_file": "./storage/rag/traces.jsonl",
+                "trace_file": "storage/rag/traces.jsonl",
                 "structured_logging": True,
             },
             "ingestion": {

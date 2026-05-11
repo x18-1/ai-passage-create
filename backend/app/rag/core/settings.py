@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 
-RAG_ROOT = Path(__file__).resolve().parents[2]
+RAG_ROOT = Path(__file__).resolve().parents[3]  # → backend/
 
 
 def resolve_path(relative: str | Path) -> Path:
@@ -168,3 +168,9 @@ class Settings:
                 metadata_enricher=ingestion.get("metadata_enricher"),
             ),
         )
+
+
+def load_settings(path=None) -> "Settings":
+    """Compatibility shim — delegates to get_rag_settings()."""
+    from app.rag.config import get_rag_settings
+    return get_rag_settings()
