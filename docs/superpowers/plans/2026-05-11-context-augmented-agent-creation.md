@@ -16,7 +16,6 @@
 
 - Create `sql/add_agent_context.sql`: adds new tables and article context columns.
 - Create `backend/app/models/user_memory.py`: SQLAlchemy model for memory metadata.
-- Create `backend/app/models/writing_skill.py`: SQLAlchemy model for writing Skills.
 - Create `backend/app/models/knowledge_document.py`: SQLAlchemy model for knowledge document metadata.
 - Create `backend/app/models/agent_context_snapshot.py`: SQLAlchemy model for injected context snapshots.
 - Modify `backend/app/models/article.py`: add context settings columns.
@@ -24,7 +23,7 @@
 ### Schemas
 
 - Create `backend/app/schemas/memory.py`: request/response models for memory CRUD.
-- Create `backend/app/schemas/writing_skill.py`: request/response models for Skill CRUD.
+- Create `backend/app/schemas/writing_skill.py`: response models for Markdown-backed Skills.
 - Create `backend/app/schemas/knowledge.py`: upload/query/document models.
 - Create `backend/app/schemas/agent_context.py`: internal `AgentContext` and snapshot VO.
 - Modify `backend/app/schemas/article.py`: add article create context flags and state fields.
@@ -32,7 +31,7 @@
 ### Services
 
 - Create `backend/app/services/memory_service.py`: memory CRUD and stage filtering.
-- Create `backend/app/services/writing_skill_service.py`: Skill CRUD, system Skill seeding, and stage filtering.
+- Create `backend/app/services/writing_skill_service.py`: Markdown Skill loading, parsing, and stage filtering.
 - Create `backend/app/services/rag_knowledge_service.py`: business wrapper around RAG ingestion/query.
 - Create `backend/app/services/agent_context_builder.py`: builds stage-specific prompt context and snapshots.
 - Modify `backend/app/services/article_service.py`: persist article context flags and surface them in state.
@@ -61,7 +60,7 @@
 ### Routers
 
 - Create `backend/app/routers/memory.py`.
-- Create `backend/app/routers/writing_skill.py`.
+- Create `backend/app/routers/writing_skill.py` for listing Markdown Skills.
 - Create `backend/app/routers/knowledge.py`.
 - Modify `backend/app/routers/article.py`: accept context options.
 - Modify `backend/app/routers/__init__.py` and `backend/app/main.py`: register routers.
@@ -69,7 +68,7 @@
 ### Frontend
 
 - Create `frontend/src/api/memoryController.ts`.
-- Create `frontend/src/api/writingSkillController.ts`.
+- Create `frontend/src/api/writingSkillController.ts` for listing available Skills.
 - Create `frontend/src/api/knowledgeController.ts`.
 - Create `frontend/src/pages/KnowledgePage.vue`.
 - Modify `frontend/src/router/index.ts`: add `/knowledge`.
@@ -99,7 +98,6 @@
 - Create: `sql/add_agent_context.sql`
 - Modify: `backend/app/models/article.py`
 - Create: `backend/app/models/user_memory.py`
-- Create: `backend/app/models/writing_skill.py`
 - Create: `backend/app/models/knowledge_document.py`
 - Create: `backend/app/models/agent_context_snapshot.py`
 
@@ -128,22 +126,6 @@ CREATE TABLE IF NOT EXISTS user_memory (
     index idx_user_active (userId, isActive),
     index idx_user_type (userId, memoryType)
 ) comment '用户长期记忆' collate = utf8mb4_unicode_ci;
-
-CREATE TABLE IF NOT EXISTS writing_skill (
-    id bigint auto_increment primary key,
-    userId bigint null comment '用户ID，系统Skill为空',
-    name varchar(100) not null comment 'Skill名称',
-    description varchar(500) null comment '说明',
-    promptTemplate text not null comment '提示词模板',
-    applicableStages json not null comment '适用阶段：title/outline/content/image',
-    isSystem tinyint default 0 not null comment '是否系统内置',
-    isActive tinyint default 1 not null comment '是否启用',
-    createTime datetime default CURRENT_TIMESTAMP not null,
-    updateTime datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
-    isDelete tinyint default 0 not null,
-    index idx_user_active (userId, isActive),
-    index idx_system_active (isSystem, isActive)
-) comment '写作Skill' collate = utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS knowledge_document (
     id bigint auto_increment primary key,
@@ -183,7 +165,7 @@ CREATE TABLE IF NOT EXISTS agent_context_snapshot (
 ALTER TABLE article
     ADD COLUMN enableMemory tinyint default 1 not null comment '是否启用长期记忆',
     ADD COLUMN enableRag tinyint default 1 not null comment '是否启用RAG',
-    ADD COLUMN enabledSkillIds json null comment '启用的写作Skill ID列表',
+    ADD COLUMN enabledSkillRefs json null comment '启用的写作Skill引用列表',
     ADD COLUMN ragCollections json null comment '启用的RAG集合';
 ```
 
@@ -217,23 +199,6 @@ class UserMemory(Base):
 ```
 
 Create matching models for the other tables using the SQL column names:
-
-```python
-# backend/app/models/writing_skill.py
-class WritingSkill(Base):
-    __tablename__ = "writing_skill"
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
-    user_id = Column("userId", BigInteger, nullable=True)
-    name = Column(String(100), nullable=False)
-    description = Column(String(500), nullable=True)
-    prompt_template = Column("promptTemplate", Text, nullable=False)
-    applicable_stages = Column("applicableStages", Text, nullable=False)
-    is_system = Column("isSystem", SmallInteger, nullable=False, default=0)
-    is_active = Column("isActive", SmallInteger, nullable=False, default=1)
-    create_time = Column("createTime", DateTime, nullable=False, default=func.now())
-    update_time = Column("updateTime", DateTime, nullable=False, default=func.now(), onupdate=func.now())
-    is_delete = Column("isDelete", SmallInteger, nullable=False, default=0)
-```
 
 ```python
 # backend/app/models/knowledge_document.py
@@ -278,7 +243,7 @@ In `backend/app/models/article.py`, add:
 ```python
 enable_memory = Column("enableMemory", SmallInteger, nullable=False, default=1, comment="是否启用长期记忆")
 enable_rag = Column("enableRag", SmallInteger, nullable=False, default=1, comment="是否启用RAG")
-enabled_skill_ids = Column("enabledSkillIds", Text, nullable=True, comment="启用的写作Skill ID列表")
+enabled_skill_refs = Column("enabledSkillRefs", Text, nullable=True, comment="启用的写作Skill引用列表")
 rag_collections = Column("ragCollections", Text, nullable=True, comment="启用的RAG集合")
 ```
 
@@ -287,7 +252,7 @@ rag_collections = Column("ragCollections", Text, nullable=True, comment="启用�
 Run:
 
 ```bash
-python -m py_compile backend/app/models/article.py backend/app/models/user_memory.py backend/app/models/writing_skill.py backend/app/models/knowledge_document.py backend/app/models/agent_context_snapshot.py
+python -m py_compile backend/app/models/article.py backend/app/models/user_memory.py backend/app/models/knowledge_document.py backend/app/models/agent_context_snapshot.py
 ```
 
 Expected: exit code 0.
@@ -295,13 +260,13 @@ Expected: exit code 0.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add sql/add_agent_context.sql backend/app/models/article.py backend/app/models/user_memory.py backend/app/models/writing_skill.py backend/app/models/knowledge_document.py backend/app/models/agent_context_snapshot.py
+git add sql/add_agent_context.sql backend/app/models/article.py backend/app/models/user_memory.py backend/app/models/knowledge_document.py backend/app/models/agent_context_snapshot.py
 git commit -m "feat: add agent context schema"
 ```
 
 ---
 
-## Task 2: Memory and Writing Skill Services
+## Task 2: Memory Service and Markdown Writing Skills
 
 **Files:**
 - Create: `backend/app/schemas/memory.py`
@@ -530,28 +495,64 @@ class MemoryService:
         )
 ```
 
-- [ ] **Step 4: Implement writing skill analog**
+- [ ] **Step 4: Implement Markdown writing skill loader**
 
-Create `backend/app/schemas/writing_skill.py` and `backend/app/services/writing_skill_service.py` using the same structure as memory. The service must include:
+Create Markdown Skills under `backend/app/writing_skills/system/`:
 
-```python
-SYSTEM_SKILLS = [
-    {
-        "name": "科技自媒体深度分析",
-        "description": "适合公众号和知乎的科技趋势分析文章",
-        "promptTemplate": "标题要有趋势感；开头用热点切入；正文包含背景、影响、机会、风险、建议；结尾给出可执行建议。",
-        "applicableStages": ["title", "outline", "content"],
-    },
-    {
-        "name": "小红书种草文案",
-        "description": "适合小红书场景的轻量种草内容",
-        "promptTemplate": "表达要具体、有场景感，减少抽象概念，多使用体验、步骤和清单。",
-        "applicableStages": ["title", "content"],
-    },
-]
+```text
+backend/app/writing_skills/system/tech-media-analysis.md
+backend/app/writing_skills/system/xiaohongshu-seeding.md
 ```
 
-Add `list_for_stage(user_id: int, stage: str, enabled_skill_ids: list[int])` that returns active system Skills and active user Skills whose IDs are selected and whose `applicableStages` includes `stage`.
+Each file uses YAML frontmatter followed by Markdown instructions:
+
+```markdown
+---
+id: tech-media-analysis
+name: 科技自媒体深度分析
+description: 适合公众号和知乎的科技趋势分析文章
+applicableStages:
+  - title
+  - outline
+  - content
+---
+
+# 写作要求
+
+- 标题要有趋势感、信息密度或反差感
+- 开头用热点事件切入
+- 正文包含背景、影响、机会、风险、建议
+- 结尾给出可执行建议
+- 避免空泛口号和过度营销语
+```
+
+Create `backend/app/schemas/writing_skill.py`:
+
+```python
+from pydantic import BaseModel, Field
+
+
+class WritingSkillVO(BaseModel):
+    ref: str
+    id: str
+    name: str
+    description: str = ""
+    applicable_stages: list[str] = Field(default_factory=list, alias="applicableStages")
+    content: str = ""
+
+    class Config:
+        populate_by_name = True
+```
+
+Create `backend/app/services/writing_skill_service.py` with a small frontmatter parser using `yaml.safe_load`. It must expose:
+
+```python
+class WritingSkillService:
+    def list_skills(self) -> list[WritingSkillVO]: ...
+    async def list_for_stage(self, user_id: int, stage: str, enabled_skill_refs: list[str]) -> list[WritingSkillVO]: ...
+```
+
+`ref` format is `system/<skill-id>`, for example `system/tech-media-analysis`.
 
 - [ ] **Step 5: Implement routers and register them**
 
@@ -591,7 +592,13 @@ async def delete_memory(memory_id: int, db: Database = Depends(get_db), current_
     return BaseResponse.success(data=await MemoryService(db).delete_memory(memory_id, current_user.id))
 ```
 
-Create the matching `writing_skill.py` router and include both routers in `backend/app/main.py`.
+Create `backend/app/routers/writing_skill.py` with only:
+
+```http
+GET /api/writing-skills
+```
+
+Include both routers in `backend/app/main.py`.
 
 - [ ] **Step 6: Run tests**
 
@@ -1097,8 +1104,8 @@ class FakeMemoryService:
 
 
 class FakeSkillService:
-    async def list_for_stage(self, user_id, stage, enabled_skill_ids):
-        return [type("Skill", (), {"name": "科技风", "prompt_template": "用热点切入"})()]
+    async def list_for_stage(self, user_id, stage, enabled_skill_refs):
+        return [type("Skill", (), {"name": "科技风", "content": "用热点切入"})()]
 
 
 class FakeRagService:
@@ -1130,7 +1137,7 @@ def test_builder_includes_memory_skill_and_rag_context():
             stage="content",
             topic="AI 编程",
             style="tech",
-            enabled_skill_ids=[1],
+            enabled_skill_refs=["system/tech-media-analysis"],
             enable_memory=True,
             enable_rag=True,
             rag_collections=[],
@@ -1189,7 +1196,7 @@ class AgentContextBuilder:
         self.rag_knowledge_service = rag_knowledge_service or RagKnowledgeService(db)
 
     async def build_context(self, user_id: int, task_id: str, stage: str, topic: str, style: str | None,
-                            enabled_skill_ids: list[int], enable_memory: bool, enable_rag: bool,
+                            enabled_skill_refs: list[str], enable_memory: bool, enable_rag: bool,
                             rag_collections: list[str]) -> AgentContext:
         memory_context = ""
         skill_context = ""
@@ -1199,8 +1206,8 @@ class AgentContextBuilder:
             memories = await self.memory_service.list_for_stage(user_id, stage)
             memory_context = "\n".join(f"- {m.title}: {m.content}" for m in memories)
 
-        skills = await self.writing_skill_service.list_for_stage(user_id, stage, enabled_skill_ids)
-        skill_context = "\n".join(f"- {s.name}: {s.prompt_template}" for s in skills)
+        skills = await self.writing_skill_service.list_for_stage(user_id, stage, enabled_skill_refs)
+        skill_context = "\n".join(f"- {s.name}: {s.content}" for s in skills)
 
         if enable_rag and stage in {"outline", "content", "title"}:
             rag_context = await self.rag_knowledge_service.query_prompt_context(
@@ -1295,12 +1302,12 @@ def test_article_create_request_accepts_context_options():
         topic="AI 编程",
         enableMemory=True,
         enableRag=True,
-        enabledSkillIds=[1, 2],
+        enabledSkillRefs=["system/tech-media-analysis", "system/xiaohongshu-seeding"],
         ragCollections=["user_1_knowledge"],
     )
     assert request.enable_memory is True
     assert request.enable_rag is True
-    assert request.enabled_skill_ids == [1, 2]
+    assert request.enabled_skill_refs == ["system/tech-media-analysis", "system/xiaohongshu-seeding"]
     assert request.rag_collections == ["user_1_knowledge"]
 
 
@@ -1309,10 +1316,10 @@ def test_article_state_has_context_fields():
     state.user_id = 1
     state.enable_memory = True
     state.enable_rag = True
-    state.enabled_skill_ids = [1]
+    state.enabled_skill_refs = ["system/tech-media-analysis"]
     state.rag_collections = ["user_1_knowledge"]
     assert state.user_id == 1
-    assert state.enabled_skill_ids == [1]
+    assert state.enabled_skill_refs == ["system/tech-media-analysis"]
 ```
 
 - [ ] **Step 2: Run test and verify it fails**
@@ -1332,7 +1339,7 @@ Modify `ArticleCreateRequest` in `backend/app/schemas/article.py`:
 ```python
 enable_memory: bool = Field(True, alias="enableMemory", description="是否启用长期记忆")
 enable_rag: bool = Field(True, alias="enableRag", description="是否启用RAG")
-enabled_skill_ids: List[int] = Field(default_factory=list, alias="enabledSkillIds")
+enabled_skill_refs: List[str] = Field(default_factory=list, alias="enabledSkillRefs")
 rag_collections: List[str] = Field(default_factory=list, alias="ragCollections")
 
 class Config:
@@ -1345,7 +1352,7 @@ Add to `ArticleState.__init__`:
 self.user_id: Optional[int] = None
 self.enable_memory: bool = True
 self.enable_rag: bool = True
-self.enabled_skill_ids: List[int] = []
+self.enabled_skill_refs: List[str] = []
 self.rag_collections: List[str] = []
 ```
 
@@ -1356,14 +1363,14 @@ Update `create_article_task()` signature:
 ```python
 enable_memory: bool = True
 enable_rag: bool = True
-enabled_skill_ids: Optional[List[int]] = None
+enabled_skill_refs: Optional[List[str]] = None
 rag_collections: Optional[List[str]] = None
 ```
 
 Extend insert SQL with:
 
 ```sql
-enableMemory, enableRag, enabledSkillIds, ragCollections
+enableMemory, enableRag, enabledSkillRefs, ragCollections
 ```
 
 and values:
@@ -1371,7 +1378,7 @@ and values:
 ```python
 "enableMemory": 1 if enable_memory else 0,
 "enableRag": 1 if enable_rag else 0,
-"enabledSkillIds": json.dumps(enabled_skill_ids or [], ensure_ascii=False),
+"enabledSkillRefs": json.dumps(enabled_skill_refs or [], ensure_ascii=False),
 "ragCollections": json.dumps(rag_collections or [], ensure_ascii=False),
 ```
 
@@ -1385,7 +1392,7 @@ In `backend/app/services/article_async_service.py`, locate state construction an
 state.user_id = article["userId"]
 state.enable_memory = bool(article.get("enableMemory", 1))
 state.enable_rag = bool(article.get("enableRag", 1))
-state.enabled_skill_ids = json.loads(article.get("enabledSkillIds") or "[]")
+state.enabled_skill_refs = json.loads(article.get("enabledSkillRefs") or "[]")
 state.rag_collections = json.loads(article.get("ragCollections") or "[]")
 ```
 
@@ -1411,7 +1418,7 @@ async def _build_context_prompt(self, state: ArticleState, stage: str) -> str:
             stage=stage,
             topic=state.topic or "",
             style=state.style,
-            enabled_skill_ids=state.enabled_skill_ids or [],
+            enabled_skill_refs=state.enabled_skill_refs or [],
             enable_memory=state.enable_memory,
             enable_rag=state.enable_rag,
             rag_collections=state.rag_collections or [],
@@ -1479,7 +1486,7 @@ const buildCreateArticlePayload = (topic, state) => ({
   enabledImageMethods: state.enabledImageMethods,
   enableMemory: state.enableMemory,
   enableRag: state.enableRag,
-  enabledSkillIds: state.enabledSkillIds,
+  enabledSkillRefs: state.enabledSkillRefs,
   ragCollections: state.ragCollections,
 })
 
@@ -1488,14 +1495,14 @@ const payload = buildCreateArticlePayload('AI 编程', {
   enabledImageMethods: ['PEXELS'],
   enableMemory: true,
   enableRag: true,
-  enabledSkillIds: [1, 2],
+  enabledSkillRefs: ["system/tech-media-analysis", "system/xiaohongshu-seeding"],
   ragCollections: ['user_1_knowledge'],
 })
 
 assert.equal(payload.topic, 'AI 编程')
 assert.equal(payload.enableMemory, true)
 assert.equal(payload.enableRag, true)
-assert.deepEqual(payload.enabledSkillIds, [1, 2])
+assert.deepEqual(payload.enabledSkillRefs, ["system/tech-media-analysis", "system/xiaohongshu-seeding"])
 assert.deepEqual(payload.ragCollections, ['user_1_knowledge'])
 ```
 
@@ -1588,7 +1595,7 @@ const doQuery = async () => {
 </script>
 ```
 
-This is the first UI slice. Replace the empty panels with full CRUD after backend endpoints are stable.
+This is the first UI slice. Replace the empty panels with Markdown Skill previews and memory forms as the backend endpoints stabilize.
 
 - [ ] **Step 5: Add route and nav item**
 
@@ -1622,7 +1629,7 @@ In `ArticleCreatePage.vue`, add reactive state:
 const contextOptions = reactive({
   enableMemory: true,
   enableRag: true,
-  enabledSkillIds: [] as number[],
+  enabledSkillRefs: [] as string[],
   ragCollections: [] as string[],
 })
 ```
@@ -1632,7 +1639,7 @@ When calling `createArticle`, include:
 ```typescript
 enableMemory: contextOptions.enableMemory,
 enableRag: contextOptions.enableRag,
-enabledSkillIds: contextOptions.enabledSkillIds,
+enabledSkillRefs: contextOptions.enabledSkillRefs,
 ragCollections: contextOptions.ragCollections,
 ```
 
@@ -1800,7 +1807,7 @@ Known scope choices:
 - MCP server code is not migrated in Phase 1.
 - Dashboard/evaluation code from the RAG project is not migrated in Phase 1.
 - Memory is manually managed; no automatic summarization in Phase 1.
-- The first KnowledgePage implementation may start with upload/query and then fill CRUD panels in the same task if time allows.
+- The first KnowledgePage implementation may start with upload/query and then fill memory forms and Skill previews in the same task if time allows.
 
 Implementation order:
 

@@ -81,14 +81,15 @@ Responsibilities:
 
 ### `WritingSkillService`
 
-Manages system and user-defined writing Skills.
+Loads system writing Skills from Markdown files.
 
 Responsibilities:
 
-- Create, update, delete, list, and toggle Skills.
-- Seed system Skills.
-- Filter Skills by user, active state, and applicable stage.
-- Return prompt templates for Agent context injection.
+- Scan `backend/app/writing_skills/system/*.md`.
+- Parse YAML frontmatter for `id`, `name`, `description`, and `applicableStages`.
+- Filter Skills by selected ref and applicable stage.
+- Return Markdown bodies for Agent context injection.
+- Treat Skills as versioned prompt assets, not mutable database records.
 
 ### `RagKnowledgeService`
 
@@ -116,7 +117,7 @@ Inputs:
 - `stage`
 - `enableMemory`
 - `enableRag`
-- `enabledSkillIds`
+- `enabledSkillRefs`
 - `ragCollections`
 
 Output:
@@ -158,31 +159,6 @@ Supported `memoryType` values:
 - `topic`
 - `constraint`
 - `visual`
-
-### `writing_skill`
-
-```text
-id bigint primary key
-userId bigint null
-name varchar(100) not null
-description varchar(500) null
-promptTemplate text not null
-applicableStages json not null
-isSystem tinyint default 0
-isActive tinyint default 1
-createTime datetime
-updateTime datetime
-isDelete tinyint default 0
-```
-
-Supported stage values:
-
-- `title`
-- `outline`
-- `content`
-- `image`
-
-System Skills are shared and cannot be deleted by regular users.
 
 ### `knowledge_document`
 
@@ -241,7 +217,7 @@ Add fields to persist the article task's context settings:
 ```text
 enableMemory tinyint default 1
 enableRag tinyint default 1
-enabledSkillIds json null
+enabledSkillRefs json null
 ragCollections json null
 ```
 
@@ -343,18 +319,16 @@ DELETE /api/memories/{id}
 
 ```http
 GET /api/writing-skills
-POST /api/writing-skills
-PATCH /api/writing-skills/{id}
-PATCH /api/writing-skills/{id}/toggle
-DELETE /api/writing-skills/{id}
 ```
+
+Writing Skills are Markdown files under `backend/app/writing_skills/system/` in Phase 1. The API lists available Skills for frontend selection and preview.
 
 ### Article Create Request Additions
 
 ```text
 enableMemory: bool
 enableRag: bool
-enabledSkillIds: list[int]
+enabledSkillRefs: list[str]
 ragCollections: list[str]
 ```
 
@@ -362,7 +336,7 @@ Defaults:
 
 - `enableMemory = true`
 - `enableRag = true`
-- `enabledSkillIds = []`
+- `enabledSkillRefs = []`
 - `ragCollections = []`, which means use the default user collections.
 
 ## Frontend Design
@@ -404,10 +378,9 @@ Features:
 
 Features:
 
-- Create, edit, delete, toggle user Skills.
-- Display system Skills.
-- Select applicable stages.
-- System Skills cannot be deleted by regular users.
+- Display Markdown-backed system Skills.
+- Show name, description, applicable stages, and content preview.
+- No create/edit/delete in Phase 1.
 
 ### RAG 测试 Tab
 
@@ -473,7 +446,7 @@ Rules:
 Backend tests:
 
 - `MemoryService` CRUD, toggle, user isolation.
-- `WritingSkillService` CRUD, toggle, system Skill restrictions.
+- `WritingSkillService` Markdown frontmatter parsing and stage filtering.
 - `RagKnowledgeService` ingestion metadata updates with mocked RAG Kernel.
 - `RagKnowledgeService` query formatting with mocked results.
 - `AgentContextBuilder` stage-specific context selection.
@@ -501,7 +474,7 @@ Phase 1 is complete when:
 1. A user can upload PDF / Markdown / TXT into the knowledge base.
 2. Uploaded documents are ingested and show `ready` status with chunk count.
 3. A user can create and enable memories.
-4. A user can create and enable writing Skills.
+4. A user can select Markdown-backed writing Skills during article creation.
 5. A user can ingest completed articles as writing samples.
 6. A user can ingest selected hotspot records as hotspot knowledge.
 7. Article creation can enable/disable memory and RAG and select Skills.

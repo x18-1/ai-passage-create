@@ -19,22 +19,6 @@ CREATE TABLE IF NOT EXISTS user_memory (
     index idx_user_type (userId, memoryType)
 ) comment '用户长期记忆' collate = utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS writing_skill (
-    id bigint auto_increment primary key,
-    userId bigint null comment '用户ID，系统Skill为空',
-    name varchar(100) not null comment 'Skill名称',
-    description varchar(500) null comment '说明',
-    promptTemplate text not null comment '提示词模板',
-    applicableStages json not null comment '适用阶段：title/outline/content/image',
-    isSystem tinyint default 0 not null comment '是否系统内置',
-    isActive tinyint default 1 not null comment '是否启用',
-    createTime datetime default CURRENT_TIMESTAMP not null,
-    updateTime datetime default CURRENT_TIMESTAMP not null on update CURRENT_TIMESTAMP,
-    isDelete tinyint default 0 not null,
-    index idx_user_active (userId, isActive),
-    index idx_system_active (isSystem, isActive)
-) comment '写作Skill' collate = utf8mb4_unicode_ci;
-
 CREATE TABLE IF NOT EXISTS knowledge_document (
     id bigint auto_increment primary key,
     userId bigint not null comment '用户ID',
@@ -73,5 +57,5 @@ CREATE TABLE IF NOT EXISTS agent_context_snapshot (
 ALTER TABLE article
     ADD COLUMN enableMemory tinyint default 1 not null comment '是否启用长期记忆',
     ADD COLUMN enableRag tinyint default 1 not null comment '是否启用RAG',
-    ADD COLUMN enabledSkillIds json null comment '启用的写作Skill ID列表',
+    ADD COLUMN enabledSkillRefs json null comment '启用的写作Skill引用列表',
     ADD COLUMN ragCollections json null comment '启用的RAG集合';
