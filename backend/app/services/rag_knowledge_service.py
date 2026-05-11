@@ -85,11 +85,12 @@ class RagKnowledgeService:
         # Remove from ChromaDB
         try:
             from app.rag.libs.vector_store.vector_store_factory import VectorStoreFactory
+            from app.rag.libs.vector_store.chroma_store import ChromaStore
             from app.rag.config import get_rag_settings
             settings = get_rag_settings()
             store = VectorStoreFactory.create(settings, collection_name=row["collectionName"])
             file_path = row["filePath"] or ""
-            if file_path:
+            if file_path and isinstance(store, ChromaStore):
                 store.delete_by_metadata({"source_path": file_path})
         except Exception as e:
             import logging
@@ -117,10 +118,13 @@ class RagKnowledgeService:
 
         try:
             from app.rag.libs.vector_store.vector_store_factory import VectorStoreFactory
+            from app.rag.libs.vector_store.chroma_store import ChromaStore
             from app.rag.config import get_rag_settings
             settings = get_rag_settings()
             store = VectorStoreFactory.create(settings, collection_name=row["collectionName"])
-            results = store.collection.get(
+            if not isinstance(store, ChromaStore):
+                return []
+            results = store.collection.get(  # type: ignore[union-attr]
                 where={"source_path": file_path},
                 include=["documents", "metadatas"],
             )

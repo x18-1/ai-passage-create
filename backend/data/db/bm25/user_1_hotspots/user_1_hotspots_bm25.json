@@ -1,0 +1,593 @@
+{
+  "metadata": {
+    "num_docs": 1,
+    "avg_doc_length": 66.0,
+    "total_terms": 53,
+    "collection": "user_1_hotspots"
+  },
+  "index": {
+    "2026": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "ai": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 7,
+          "doc_length": 66
+        }
+      ]
+    },
+    "编程": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 4,
+          "doc_length": 66
+        }
+      ]
+    },
+    "工具": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 2,
+          "doc_length": 66
+        }
+      ]
+    },
+    "全景": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "测评": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "知乎": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "内容": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "关联": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "文章": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "直接": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "聚焦": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "选型": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "性能": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "对比": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "深入": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "剖析": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "编程技术": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "软件开发": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "范式": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 3,
+          "doc_length": 66
+        }
+      ]
+    },
+    "重构": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 2,
+          "doc_length": 66
+        }
+      ]
+    },
+    "实际": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "应用": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "价值": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "背景": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "介绍": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "跃迁": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "2025": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "无疑": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "coding": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "航海": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "各大": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "科技": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "巨头": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "初创": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "公司": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "纷纷": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "入局": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "凭借": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "技术": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "惊人": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "能力": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "前端": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "后端": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "数据库": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "devops": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "原型": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "构建": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "速度": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "正以": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "前所未有": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "力度": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    },
+    "软件工程": {
+      "idf": -1.0986122886681098,
+      "df": 1,
+      "postings": [
+        {
+          "chunk_id": "e3a52dcd_0000_a9bfbf46",
+          "tf": 1,
+          "doc_length": 66
+        }
+      ]
+    }
+  }
+}
