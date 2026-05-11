@@ -10,6 +10,7 @@
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-Compatible-412991?style=flat-square&logo=openai&logoColor=white)
+![ChromaDB](https://img.shields.io/badge/ChromaDB-RAG-FF6B35?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)
 
 </div>
@@ -31,6 +32,7 @@ AI 爆款文章创作器是一个基于 **FastAPI + OpenAI SDK** 构建的智能
 | 特性 | 说明 | 价值 |
 |------|------|------|
 | 🤖 多智能体协作 | 5 个 Agent 分工协作，Pipeline 编排 | 专业分工，质量更高 |
+| 🧠 上下文增强 | Memory + Skills + RAG 三层注入 Agent prompt | 写作风格一致，内容有据可查 |
 | 🎨 多元配图 | 6 种配图策略 + 自动降级 | 图文并茂，永不中断 |
 | 📡 实时流式输出 | SSE 推送大纲/正文创作过程 | 所见即所得 |
 | 🔥 热点监控 | 关键词持续监控 + WebSocket 通知 | 第一时间捕捉创作机会 |
@@ -100,15 +102,89 @@ AI 爆款文章创作器是一个基于 **FastAPI + OpenAI SDK** 构建的智能
 
 ### 上下文增强 Agent 创作
 
-系统为 5 个创作 Agent 提供三层上下文注入，使生成内容更贴合用户偏好：
+系统在原有 5 Agent Pipeline 外增加了一个**上下文层**，在每个创作阶段调用 `AgentContextBuilder` 拼装注入块，追加到对应 Agent 的 system prompt 末尾：
 
-| 上下文层 | 来源 | 说明 |
-|--------|------|------|
-| 长期记忆 | 用户手动创建/系统自动提炼 | 写作风格、平台偏好、话题倾向、配图风格等个性化记忆 |
-| 写作 Skills | Markdown 技能文件 | 可按平台/文体启用的结构化写作规则（科技自媒体、小红书种草等） |
-| 知识库 RAG | 用户上传文档/历史文章/热点记录 | Hybrid Search 检索（向量 + BM25 + RRF 融合）后按相关度排序注入 |
+```
+选题
+ └── AgentContextBuilder.build_context(stage="title")
+       ├── MemoryService.list_for_stage()     → 【用户长期偏好】
+       ├── WritingSkillService.list_for_stage() → 【启用写作 Skill】
+       └── RagKnowledgeService.query_prompt_context() → 【相关知识库资料】
+            └── HybridSearch(Dense + BM25 + RRF) → Top-K chunks
+```
 
-每次创作时系统自动构建并保存 `agent_context_snapshot`，记录各阶段注入的 Token 量，方便追踪上下文消耗。知识库管理入口在顶部导航「知识库」页，支持 PDF / Markdown / TXT 文件上传和 RAG 查询测试。
+每次构建后自动写入 `agent_context_snapshot` 表，记录 token 估算量，方便追踪上下文消耗。
+
+#### 三层注入详解
+
+**① 长期记忆（Memory）**
+
+用户在「个人设置」中创建结构化写作记忆，分为五种类型，并按权重（0-100）排序注入：
+
+| 类型 | 举例 |
+|------|------|
+| `style` 写作风格 | "少用营销语，结构清晰，以数据支撑观点" |
+| `platform` 平台偏好 | "主攻微信公众号，段落不超过 150 字" |
+| `topic` 话题倾向 | "专注 AI 编程工具、大模型应用方向" |
+| `constraint` 内容约束 | "不提竞品品牌名，不做夸大承诺" |
+| `visual` 配图风格 | "科技感强，偏好流程图和架构图" |
+
+各 Agent 阶段按需过滤：标题/大纲/正文阶段注入 style/platform/topic/constraint，配图阶段注入 visual/platform。
+
+**② 写作 Skills**
+
+以 Markdown + YAML Frontmatter 格式定义的写作模板，存放于 `backend/app/writing_skills/system/`。创建文章时可勾选启用，支持按 stage 过滤：
+
+```markdown
+---
+id: tech-media-analysis
+name: 科技自媒体深度分析
+applicableStages: [title, outline, content]
+---
+
+# 写作要求
+- 标题要有趋势感、信息密度或反差感
+- 开头用热点事件切入
+- 正文包含背景、影响、机会、风险、建议
+```
+
+内置 Skills：`tech-media-analysis`（科技自媒体）、`xiaohongshu-seeding`（小红书种草）。可按需在目录下新增 `.md` 文件扩展。
+
+**③ 知识库 RAG（Retrieval-Augmented Generation）**
+
+内嵌自研 Modular RAG Kernel（从 `plugin/MODULAR-RAG-MCP-SERVER` 迁移内化），完整的 Hybrid Search 管线：
+
+```
+文档入库流程
+文件(PDF/MD/TXT) → MarkItDown 解析 → 标题边界分块（.md）/ 递归分块（其他）
+                → ChunkRefiner → MetadataEnricher
+                → DashScope text-embedding-v3 (1024-dim) → ChromaDB
+                → BM25 分词索引（jieba）→ JSON 倒排表
+
+检索流程
+Query → 向量化 → DenseRetriever（ChromaDB HNSW）
+                → SparseRetriever（BM25 TF-IDF）
+                → RRF 融合（k=60）→ Top-K chunks
+                → 格式化注入 prompt
+```
+
+知识库来源支持三类，对应独立的 ChromaDB collection：
+
+| 来源 | Collection | 说明 |
+|------|-----------|------|
+| 上传文档 | `user_{id}_knowledge` | PDF / Markdown / TXT 手动上传 |
+| 历史文章 | `user_{id}_articles` | 完成文章一键入库作为写作样例 |
+| 监控热点 | `user_{id}_hotspots` | 批量勾选热点记录入库 |
+
+Markdown 文件分块策略：按 `#`/`##`/`###`/`####` 标题边界切分，每块携带章节面包屑（`[第一章 > 1.1 现状]`），确保检索结果携带结构上下文。
+
+#### 知识库管理页面
+
+导航栏「知识库」页提供完整的管理界面：
+- 文档列表：状态（pending / ready / failed）、chunk 数量
+- **查看 Chunks**：点击文档展开右侧抽屉，逐块展示文本内容、字数和标题标签
+- **删除文档**：同步清除 ChromaDB 向量和 DB 记录
+- **RAG 检索测试**：输入问题实时查询，验证入库效果
 
 | 能力 | 说明 |
 |------|------|
@@ -175,6 +251,11 @@ AI 爆款文章创作器是一个基于 **FastAPI + OpenAI SDK** 构建的智能
 | Redis | 5.2.0 | 缓存 / 会话管理 |
 | APScheduler | >=3.10 | 热点监控定时调度 |
 | httpx + BeautifulSoup | 0.28.1 / 4.12.3 | 多来源热点抓取 |
+| ChromaDB | >=0.6.0 | 向量数据库（RAG 存储） |
+| langchain-text-splitters | >=0.3.0 | 递归 + Markdown 标题分块 |
+| jieba | >=0.42 | 中文分词（BM25 稀疏索引） |
+| markitdown[pdf] | >=0.1.0 | PDF → Markdown 解析 |
+| Pillow | >=10.0.0 | PDF 图片提取 |
 | Stripe | >=14.3.0 | 支付集成 |
 | 腾讯云 COS SDK | 1.9.32 | 对象存储 |
 | Google Gen AI SDK | 1.75.0 | Gemini AI 生图 |
@@ -210,6 +291,9 @@ mysql -uroot -p < sql/create_table.sql
 # 补充新增功能所需表；脚本使用 IF NOT EXISTS，可重复执行
 mysql -uroot -p < sql/add_hotspot_monitoring.sql
 mysql -uroot -p < sql/add_article_sync_record.sql
+
+# 上下文增强 Agent 所需表（user_memory / knowledge_document / agent_context_snapshot）
+mysql -uroot -p < sql/add_agent_context.sql
 ```
 
 ### 2. 配置环境变量
@@ -351,20 +435,32 @@ docker compose down -v
 │   │   │   ├── hotspot_monitor.py   # 热点监控 / 关键词 / 通知 / WebSocket
 │   │   │   └── article_sync.py      # 文章草稿同步记录
 │   │   ├── services/                # 业务服务
-│   │   │   ├── article_agent_service.py
+│   │   │   ├── article_agent_service.py   # 含上下文注入逻辑
+│   │   │   ├── agent_context_builder.py   # 三层上下文构建器
+│   │   │   ├── memory_service.py          # 长期记忆 CRUD
+│   │   │   ├── writing_skill_service.py   # Markdown Skills 加载
+│   │   │   ├── rag_knowledge_service.py   # RAG 入库 / 查询 / 删除
 │   │   │   ├── hotspot_monitor_service.py
-│   │   │   ├── hotspot_record_service.py
-│   │   │   ├── hotspot_keyword_service.py
-│   │   │   ├── hotspot_sources.py
-│   │   │   ├── article_sync_record_service.py
-│   │   │   ├── image_service_strategy.py
-│   │   │   ├── cos_service.py
-│   │   │   ├── pexels_service.py
-│   │   │   ├── nano_banana_service.py
-│   │   │   ├── mermaid_service.py
-│   │   │   ├── iconify_service.py
-│   │   │   ├── emoji_pack_service.py
-│   │   │   └── svg_diagram_service.py
+│   │   │   └── image_service_strategy.py  # 配图策略模式
+│   │   ├── rag/                     # 内嵌 Modular RAG Kernel
+│   │   │   ├── kernel.py            # 对外 Facade（ingest_file / query）
+│   │   │   ├── config.py            # 从 app.config 桥接 RAG Settings
+│   │   │   ├── core/                # Settings、Types、QueryEngine、Trace
+│   │   │   │   └── query_engine/    # HybridSearch / DenseRetriever / SparseRetriever / RRF
+│   │   │   ├── ingestion/           # 入库流水线（6 阶段）
+│   │   │   │   ├── pipeline.py      # 主编排器
+│   │   │   │   ├── chunking/        # DocumentChunker（自动选 Markdown/Recursive splitter）
+│   │   │   │   ├── embedding/       # DenseEncoder + SparseEncoder + BatchProcessor
+│   │   │   │   ├── storage/         # VectorUpserter + BM25Indexer
+│   │   │   │   └── transform/       # ChunkRefiner + MetadataEnricher
+│   │   │   └── libs/                # 基础库
+│   │   │       ├── embedding/       # OpenAI-compatible（DashScope）
+│   │   │       ├── vector_store/    # ChromaDB（embedding_function=None）
+│   │   │       ├── splitter/        # RecursiveSplitter + MarkdownSplitter
+│   │   │       └── loader/          # PdfLoader + TextLoader
+│   │   ├── writing_skills/system/   # 内置写作 Skill 模板（Markdown）
+│   │   │   ├── tech-media-analysis.md
+│   │   │   └── xiaohongshu-seeding.md
 │   │   ├── models/                  # 数据库模型（SQLAlchemy）
 │   │   ├── schemas/                 # 请求/响应 Schema（Pydantic）
 │   │   ├── managers/                # 管理器（SSE、热点 WebSocket 等）
@@ -399,13 +495,16 @@ docker compose down -v
 | 表名 | 说明 |
 |------|------|
 | user | 用户表（含 VIP 时间、配额） |
-| article | 文章表（含状态、阶段、配图方式限制） |
+| article | 文章表（含状态、阶段、配图方式限制、上下文选项） |
 | agent_log | 智能体执行日志 |
 | payment_record | 支付记录 |
 | hotspot_keyword | 热点监控关键词 |
 | hotspot_record | 热点记录 |
 | hotspot_notification | 热点站内通知 |
 | article_sync_record | 文章草稿同步记录 |
+| user_memory | 用户长期记忆（写作偏好） |
+| knowledge_document | 知识库文档元数据 |
+| agent_context_snapshot | Agent 上下文注入快照（含 token 估算） |
 
 ### 文章表关键字段
 
@@ -466,6 +565,33 @@ errorMessage -- 同步失败原因
 |------|------|------|
 | GET | `/api/article-sync/records/{task_id}` | 获取某篇文章的草稿同步记录 |
 | POST | `/api/article-sync/record` | 创建或更新平台草稿同步状态 |
+
+### 长期记忆
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/memories` | 查询当前用户所有记忆 |
+| POST | `/api/memories` | 新增记忆 |
+| PATCH | `/api/memories/{id}/toggle` | 启用/禁用记忆 |
+| DELETE | `/api/memories/{id}` | 删除记忆 |
+
+### 写作 Skills
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/writing-skills` | 列出所有系统内置 Skill |
+
+### 知识库
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/knowledge/documents` | 查询用户知识库文档列表 |
+| POST | `/api/knowledge/upload` | 上传 PDF / Markdown / TXT 文件入库 |
+| DELETE | `/api/knowledge/documents/{id}` | 删除文档（同步清除 ChromaDB 向量） |
+| GET | `/api/knowledge/documents/{id}/chunks` | 查看文档分块列表 |
+| POST | `/api/knowledge/query` | RAG 检索测试 |
+| POST | `/api/knowledge/articles/{taskId}/ingest` | 将已完成文章入库 |
+| POST | `/api/knowledge/hotspots/ingest` | 批量将热点记录入库 |
 
 ## 🔑 API Key 获取
 
