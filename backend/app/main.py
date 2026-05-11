@@ -16,9 +16,11 @@ from app.routers import (
     article_sync_router,
     hotspot_router,
     hotspot_monitor_router,
+    memory_router,
     payment_router,
     webhook_router,
     statistics_router,
+    writing_skill_router,
 )
 from app.services.hotspot_monitor_service import monitor_service
 from app.exceptions import BusinessException, ErrorCode
@@ -113,9 +115,11 @@ app.include_router(article_router, prefix="/api")
 app.include_router(article_sync_router, prefix="/api")
 app.include_router(hotspot_router, prefix="/api")
 app.include_router(hotspot_monitor_router, prefix="/api")
+app.include_router(memory_router, prefix="/api")
 app.include_router(payment_router, prefix="/api")
 app.include_router(webhook_router, prefix="/api")
 app.include_router(statistics_router, prefix="/api")
+app.include_router(writing_skill_router, prefix="/api")
 
 
 @app.get("/")
