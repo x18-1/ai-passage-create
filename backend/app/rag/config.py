@@ -52,7 +52,7 @@ def get_rag_settings() -> Settings:
                 "chunk_size": 1000,
                 "chunk_overlap": 200,
                 "splitter": "recursive",
-                "batch_size": 100,
+                "batch_size": 10,
                 "chunk_refiner": {"use_llm": False},
                 "metadata_enricher": {"use_llm": False},
             },

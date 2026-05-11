@@ -11,8 +11,11 @@ Design Principles:
 - Deterministic: Same inputs produce same batching and results
 """
 
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 import time
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 
 from app.rag.core.types import Chunk
@@ -162,7 +165,15 @@ class BatchProcessor:
                 successful_chunks += len(batch)
                 
             except Exception as e:
-                # Record failure but continue with remaining batches
+                # Log the actual error so it's visible in backend output
+                logger.error(
+                    "Batch %d/%d encoding failed (chunks %d-%d): %s",
+                    batch_idx + 1, batch_count,
+                    batch_idx * self.batch_size,
+                    batch_idx * self.batch_size + len(batch),
+                    e,
+                    exc_info=True,
+                )
                 failed_chunks += len(batch)
                 if trace:
                     trace.record_stage(

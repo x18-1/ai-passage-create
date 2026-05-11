@@ -70,12 +70,12 @@ async def ingest_article(
     current_user: LoginUserVO = Depends(require_login),
 ):
     row = await db.fetch_one(
-        query="SELECT title, content FROM article WHERE taskId = :taskId AND userId = :userId AND isDelete = 0",
+        query="SELECT mainTitle, topic, content FROM article WHERE taskId = :taskId AND userId = :userId AND isDelete = 0",
         values={"taskId": task_id, "userId": current_user.id},
     )
     if not row:
         return BaseResponse(code=40004, data=None, message="文章不存在")
-    title = row["title"] or task_id
+    title = row["mainTitle"] or row["topic"] or task_id
     content = row["content"] or ""
     tmp_dir = Path("/tmp/ai-passage-uploads") / str(current_user.id)
     tmp_dir.mkdir(parents=True, exist_ok=True)
