@@ -27,6 +27,10 @@ class Article(Base):
     full_content = Column("fullContent", Text, nullable=True, comment="完整图文（Markdown格式，含图片）")
     cover_image = Column("coverImage", String(512), nullable=True, comment="封面图 URL")
     images = Column(Text, nullable=True, comment="配图列表（JSON数组，包含封面图 position=1）")
+    enable_memory = Column("enableMemory", SmallInteger, nullable=False, default=1, comment="是否启用长期记忆")
+    enable_rag = Column("enableRag", SmallInteger, nullable=False, default=1, comment="是否启用RAG")
+    enabled_skill_ids = Column("enabledSkillIds", Text, nullable=True, comment="启用的写作Skill ID列表")
+    rag_collections = Column("ragCollections", Text, nullable=True, comment="启用的RAG集合")
     status = Column(String(20), nullable=False, default="PENDING", comment="状态：PENDING/PROCESSING/COMPLETED/FAILED")
     phase = Column(
         String(40),
