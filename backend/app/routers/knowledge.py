@@ -3,8 +3,6 @@
 from pathlib import Path
 from typing import List
 
-import httpx
-from bs4 import BeautifulSoup
 from databases import Database
 from fastapi import APIRouter, Depends, File, UploadFile
 from pydantic import BaseModel
@@ -18,29 +16,6 @@ from app.services.rag_knowledge_service import RagKnowledgeService
 
 
 router = APIRouter(prefix="/knowledge", tags=["知识库"])
-
-
-async def _fetch_article_text(url: str) -> str:
-    """Fetch and extract main text from a URL. Returns empty string on failure."""
-    try:
-        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
-            headers = {"User-Agent": "Mozilla/5.0 (compatible; RAG-Crawler/1.0)"}
-            resp = await client.get(url, headers=headers)
-            if resp.status_code != 200:
-                return ""
-            soup = BeautifulSoup(resp.text, "lxml")
-            # Remove script/style/nav/header/footer tags
-            for tag in soup(["script", "style", "nav", "header", "footer", "aside"]):
-                tag.decompose()
-            # Try article/main content first
-            main = soup.find("article") or soup.find("main") or soup.find(id="content") or soup.body
-            if main is None:
-                return ""
-            text = main.get_text(separator="\n", strip=True)
-            # Limit to 8000 chars to avoid too large chunks
-            return text[:8000]
-    except Exception:
-        return ""
 
 
 class IngestHotspotsRequest(BaseModel):
@@ -144,10 +119,7 @@ async def ingest_hotspots(
     for row in rows:
         rid = row["id"]
         title = row["title"] or f"热点_{rid}"
-        full_text = await _fetch_article_text(row["url"] or "")
         body = f"# {title}\n\n来源: {row['url'] or ''}\n\n{row['summary'] or ''}\n\n{row['content'] or ''}"
-        if full_text:
-            body += f"\n\n## 原文全文\n\n{full_text}"
         tmp_file = tmp_dir / f"hotspot_{rid}.md"
         tmp_file.write_text(body, encoding="utf-8")
         last_id = await svc.ingest_text_source(
