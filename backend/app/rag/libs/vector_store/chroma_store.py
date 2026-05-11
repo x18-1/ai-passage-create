@@ -121,11 +121,15 @@ class ChromaStore(BaseVectorStore):
                 f"Failed to initialize ChromaDB client at '{self.persist_directory}': {e}"
             ) from e
         
-        # Get or create collection
+        # Get or create collection — embedding_function=None because we always
+        # provide our own vectors (from DashScope text-embedding-v3, 1024-dim).
+        # Without this, ChromaDB loads its default ONNX embedding (384-dim) and
+        # dimension mismatch errors occur on upsert.
         try:
             self.collection = self.client.get_or_create_collection(
                 name=self.collection_name,
-                metadata={"hnsw:space": "cosine"}  # Use cosine similarity
+                metadata={"hnsw:space": "cosine"},
+                embedding_function=None,
             )
         except Exception as e:
             raise RuntimeError(
@@ -325,7 +329,8 @@ class ChromaStore(BaseVectorStore):
             self.client.delete_collection(name=target_collection)
             self.collection = self.client.get_or_create_collection(
                 name=target_collection,
-                metadata={"hnsw:space": "cosine"}
+                metadata={"hnsw:space": "cosine"},
+                embedding_function=None,
             )
             logger.info(f"Successfully cleared collection '{target_collection}'")
         except Exception as e:

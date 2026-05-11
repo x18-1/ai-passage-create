@@ -29,7 +29,12 @@ try:
 except ImportError:
     PYMUPDF_AVAILABLE = False
 
-from PIL import Image
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 import io
 
 from app.rag.core.types import Document
@@ -242,8 +247,11 @@ class PdfLoader(BaseLoader):
                         
                         # Get image dimensions
                         try:
-                            img = Image.open(io.BytesIO(image_bytes))
-                            width, height = img.size
+                            if PIL_AVAILABLE:
+                                img = Image.open(io.BytesIO(image_bytes))
+                                width, height = img.size
+                            else:
+                                width, height = 0, 0
                         except Exception:
                             width, height = 0, 0
                         

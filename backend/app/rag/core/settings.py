@@ -94,6 +94,16 @@ class IngestionSettings:
 
 
 @dataclass(frozen=True)
+class VisionLLMSettings:
+    enabled: bool = False
+    provider: str = "none"
+    model: str = "none"
+    max_image_size: int = 1024
+    api_key: str | None = None
+    base_url: str | None = None
+
+
+@dataclass(frozen=True)
 class Settings:
     llm: LLMSettings
     embedding: EmbeddingSettings
@@ -103,6 +113,7 @@ class Settings:
     evaluation: EvaluationSettings
     observability: ObservabilitySettings
     ingestion: IngestionSettings | None = None
+    vision_llm: VisionLLMSettings | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Settings":

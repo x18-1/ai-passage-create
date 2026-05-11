@@ -1,7 +1,10 @@
 """RAG kernel facade used by application services."""
 
+import logging
 from dataclasses import dataclass
 from typing import Iterable
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -39,10 +42,20 @@ class RagKernel:
             from app.rag.ingestion.pipeline import IngestionPipeline
             from app.rag.config import get_rag_settings
         except ImportError as exc:
+            logger.error("RAG import failed: %s", exc, exc_info=True)
             return RagIngestResult(success=False, error=f"RAG ingestion pipeline is unavailable: {exc}")
 
-        pipeline = IngestionPipeline(get_rag_settings(), collection=collection, force=force)
+        try:
+            pipeline = IngestionPipeline(get_rag_settings(), collection=collection, force=force)
+        except Exception as exc:
+            logger.error("IngestionPipeline init failed: %s", exc, exc_info=True)
+            return RagIngestResult(success=False, error=f"Pipeline init error: {exc}")
+
         result = pipeline.run(file_path)
+        if not result.success:
+            logger.error("RAG ingest failed file=%s error=%s", file_path, result.error)
+        else:
+            logger.info("RAG ingest OK file=%s chunks=%d", file_path, result.chunk_count)
         return RagIngestResult(
             success=bool(result.success),
             chunk_count=int(result.chunk_count),

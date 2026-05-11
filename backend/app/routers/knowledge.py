@@ -106,7 +106,7 @@ async def ingest_hotspots(
         query=f"""
             SELECT id, title, content, summary
             FROM hotspot_record
-            WHERE id IN ({placeholders}) AND userId = :userId AND isDelete = 0
+            WHERE id IN ({placeholders}) AND userId = :userId
         """,
         values=values,
     )
