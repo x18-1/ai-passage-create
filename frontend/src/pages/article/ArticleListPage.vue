@@ -128,6 +128,16 @@
                   <SendOutlined />
                   发布
                 </a-button>
+                <a-button
+                  v-if="record.status === 'COMPLETED' && record.taskId"
+                  type="link"
+                  size="small"
+                  @click="doIngestArticle(record)"
+                  class="action-btn"
+                  title="加入写作知识库，下次创作时 RAG 可引用"
+                >
+                  入库
+                </a-button>
                 <a-popconfirm
                   title="确定要删除这篇文章吗?"
                   ok-text="确定"
@@ -176,6 +186,7 @@ import {
   SendOutlined,
 } from '@ant-design/icons-vue'
 import { listArticle, deleteArticle as deleteArticleApi, getArticle } from '@/api/articleController'
+import { ingestArticle } from '@/api/knowledgeController'
 import dayjs, { type Dayjs } from 'dayjs'
 
 const router = useRouter()
@@ -313,6 +324,16 @@ const publishArticle = (record: API.ArticleVO) => {
       taskId: record.taskId || '',
     },
   })
+}
+
+const doIngestArticle = async (record: API.ArticleVO) => {
+  if (!record.taskId) return
+  try {
+    await ingestArticle(record.taskId)
+    message.success('已加入写作知识库')
+  } catch {
+    message.error('入库失败')
+  }
 }
 
 // 导出文章

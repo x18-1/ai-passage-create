@@ -79,6 +79,10 @@
                   <span>永久会员权益</span>
                 </a-menu-item>
                 <a-menu-divider v-if="isVip" />
+                <a-menu-item key="profile" class="dropdown-item" @click="router.push('/user/profile')">
+                  <SettingOutlined />
+                  <span>个人设置</span>
+                </a-menu-item>
                 <a-menu-item @click="doLogout" class="dropdown-item">
                   <LogoutOutlined />
                   <span>退出登录</span>

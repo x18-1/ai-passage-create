@@ -1,9 +1,11 @@
 """Knowledge base routes."""
 
 from pathlib import Path
+from typing import List
 
 from databases import Database
 from fastapi import APIRouter, Depends, File, UploadFile
+from pydantic import BaseModel
 
 from app.database import get_db
 from app.deps import require_login
@@ -14,6 +16,10 @@ from app.services.rag_knowledge_service import RagKnowledgeService
 
 
 router = APIRouter(prefix="/knowledge", tags=["知识库"])
+
+
+class IngestHotspotsRequest(BaseModel):
+    recordIds: List[int]
 
 
 @router.get("/documents", response_model=BaseResponse[list[KnowledgeDocumentVO]])
@@ -55,3 +61,72 @@ async def query_knowledge(
         top_k=request.top_k,
     )
     return BaseResponse.success(data=context)
+
+
+@router.post("/articles/{task_id}/ingest", response_model=BaseResponse[int])
+async def ingest_article(
+    task_id: str,
+    db: Database = Depends(get_db),
+    current_user: LoginUserVO = Depends(require_login),
+):
+    row = await db.fetch_one(
+        query="SELECT title, content FROM article WHERE taskId = :taskId AND userId = :userId AND isDelete = 0",
+        values={"taskId": task_id, "userId": current_user.id},
+    )
+    if not row:
+        return BaseResponse(code=40004, data=None, message="文章不存在")
+    title = row["title"] or task_id
+    content = row["content"] or ""
+    tmp_dir = Path("/tmp/ai-passage-uploads") / str(current_user.id)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_file = tmp_dir / f"article_{task_id}.md"
+    tmp_file.write_text(f"# {title}\n\n{content}", encoding="utf-8")
+    doc_id = await RagKnowledgeService(db).ingest_text_source(
+        user_id=current_user.id,
+        title=title,
+        source_type="article",
+        source_id=task_id,
+        file_path=str(tmp_file),
+    )
+    return BaseResponse.success(data=doc_id)
+
+
+@router.post("/hotspots/ingest", response_model=BaseResponse[int])
+async def ingest_hotspots(
+    request: IngestHotspotsRequest,
+    db: Database = Depends(get_db),
+    current_user: LoginUserVO = Depends(require_login),
+):
+    if not request.recordIds:
+        return BaseResponse(code=40000, data=None, message="recordIds 不能为空")
+    placeholders = ", ".join(f":id{i}" for i in range(len(request.recordIds)))
+    values: dict = {"userId": current_user.id}
+    values.update({f"id{i}": rid for i, rid in enumerate(request.recordIds)})
+    rows = await db.fetch_all(
+        query=f"""
+            SELECT id, title, content, summary
+            FROM hotspot_record
+            WHERE id IN ({placeholders}) AND userId = :userId AND isDelete = 0
+        """,
+        values=values,
+    )
+    if not rows:
+        return BaseResponse(code=40004, data=None, message="未找到热点记录")
+    tmp_dir = Path("/tmp/ai-passage-uploads") / str(current_user.id)
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    svc = RagKnowledgeService(db)
+    last_id = 0
+    for row in rows:
+        rid = row["id"]
+        title = row["title"] or f"热点_{rid}"
+        body = f"# {title}\n\n{row['summary'] or ''}\n\n{row['content'] or ''}"
+        tmp_file = tmp_dir / f"hotspot_{rid}.md"
+        tmp_file.write_text(body, encoding="utf-8")
+        last_id = await svc.ingest_text_source(
+            user_id=current_user.id,
+            title=title,
+            source_type="hotspot",
+            source_id=str(rid),
+            file_path=str(tmp_file),
+        )
+    return BaseResponse.success(data=last_id)

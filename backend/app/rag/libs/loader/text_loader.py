@@ -6,7 +6,7 @@ import hashlib
 
 
 class TextLoader(BaseLoader):
-    def load(self, file_path: str) -> Document:
+    def load(self, file_path: str | Path) -> Document:
         path = Path(file_path)
         text = path.read_text(encoding="utf-8", errors="replace")
         doc_id = hashlib.sha256(text.encode()).hexdigest()[:16]

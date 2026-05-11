@@ -190,7 +190,7 @@ class IngestionPipeline:
     
     def run(
         self,
-        file_path: str,
+        file_path: str | Path,
         trace: Optional[TraceContext] = None,
         on_progress: Optional[Callable[[str, int, int], None]] = None,
     ) -> PipelineResult:
@@ -536,14 +536,15 @@ class IngestionPipeline:
             
         except Exception as e:
             logger.error(f"❌ Pipeline failed: {e}", exc_info=True)
-            self.integrity_checker.mark_failed(file_hash, str(file_path), str(e))
-            
+            _file_hash = locals().get("file_hash")
+            if _file_hash:
+                self.integrity_checker.mark_failed(_file_hash, str(file_path), str(e))
             return PipelineResult(
                 success=False,
                 file_path=str(file_path),
-                doc_id=file_hash if 'file_hash' in locals() else None,
+                doc_id=_file_hash,
                 error=str(e),
-                stages=stages
+                stages=stages,
             )
     
     def close(self) -> None:
@@ -568,7 +569,8 @@ def run_pipeline(
     Returns:
         PipelineResult with execution details
     """
-    settings = load_settings(settings_path)
+    from app.rag.core.settings import load_settings as _load_settings
+    settings = _load_settings(settings_path)
     pipeline = IngestionPipeline(settings, collection=collection, force=force)
     
     try:

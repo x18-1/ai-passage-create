@@ -27,3 +27,19 @@ export async function queryKnowledge(body: API.KnowledgeQueryRequest, options?: 
     ...(options || {}),
   })
 }
+
+export async function ingestArticle(taskId: string, options?: { [key: string]: any }) {
+  return request<API.BaseResponseLong>(`/knowledge/articles/${taskId}/ingest`, {
+    method: 'POST',
+    ...(options || {}),
+  })
+}
+
+export async function ingestHotspots(recordIds: number[], options?: { [key: string]: any }) {
+  return request<API.BaseResponseLong>('/knowledge/hotspots/ingest', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    data: { recordIds },
+    ...(options || {}),
+  })
+}
