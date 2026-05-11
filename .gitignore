@@ -8,3 +8,7 @@ CLAUDE.md
 plugin/
 
 docs
+
+# RAG runtime data
+backend/storage/
+backend/data/
