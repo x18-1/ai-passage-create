@@ -46,7 +46,11 @@ async def create_article(
         request.topic,
         current_user,
         request.style,  # 第 5 期新增
-        request.enabled_image_methods  # 第 5 期新增
+        request.enabled_image_methods,  # 第 5 期新增
+        request.enable_memory,
+        request.enable_rag,
+        request.enabled_skill_refs,
+        request.rag_collections,
     )
     
     # 异步执行阶段1：生成标题方案
@@ -55,6 +59,11 @@ async def create_article(
             task_id,
             request.topic,
             request.style,
+            current_user.id,
+            request.enable_memory,
+            request.enable_rag,
+            request.enabled_skill_refs,
+            request.rag_collections,
         )
     )
     

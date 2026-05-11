@@ -22,6 +22,11 @@ class ArticleAsyncService:
         task_id: str,
         topic: str,
         style: Optional[str] = None,
+        user_id: Optional[int] = None,
+        enable_memory: bool = True,
+        enable_rag: bool = True,
+        enabled_skill_refs: Optional[list[str]] = None,
+        rag_collections: Optional[list[str]] = None,
     ):
         """阶段1：异步生成标题方案"""
         logger.info("阶段1异步任务开始, taskId=%s, topic=%s, style=%s", task_id, topic, style)
@@ -34,8 +39,13 @@ class ArticleAsyncService:
 
             state = ArticleState()
             state.task_id = task_id
+            state.user_id = user_id
             state.topic = topic
             state.style = style
+            state.enable_memory = enable_memory
+            state.enable_rag = enable_rag
+            state.enabled_skill_refs = enabled_skill_refs or []
+            state.rag_collections = rag_collections or []
 
             await article_agent_service.execute_phase1_generate_titles(
                 state,
@@ -83,6 +93,8 @@ class ArticleAsyncService:
 
             state = ArticleState()
             state.task_id = task_id
+            self._load_context_options(state, article)
+            state.topic = article["topic"]
             state.style = article["style"]
             state.user_description = article["userDescription"]
             state.title = TitleResult(
@@ -127,6 +139,8 @@ class ArticleAsyncService:
             outline_data = json.loads(article["outline"]) if article["outline"] else []
             state = ArticleState()
             state.task_id = task_id
+            self._load_context_options(state, article)
+            state.topic = article["topic"]
             state.style = article["style"]
             state.enabled_image_methods = (
                 json.loads(article["enabledImageMethods"])
@@ -238,6 +252,32 @@ class ArticleAsyncService:
             return None
         
         return data
+
+    def _load_context_options(self, state: ArticleState, article):
+        """从文章记录恢复上下文增强配置"""
+        state.user_id = article["userId"]
+        enable_memory = self._safe_get(article, "enableMemory", 1)
+        enable_rag = self._safe_get(article, "enableRag", 1)
+        state.enable_memory = bool(enable_memory)
+        state.enable_rag = bool(enable_rag)
+        state.enabled_skill_refs = self._safe_json_loads(self._safe_get(article, "enabledSkillRefs"))
+        state.rag_collections = self._safe_json_loads(self._safe_get(article, "ragCollections"))
+
+    def _safe_get(self, row, key: str, default=None):
+        try:
+            value = row[key]
+        except (KeyError, TypeError):
+            value = default
+        return default if value is None else value
+
+    def _safe_json_loads(self, raw: Optional[str]) -> list:
+        if not raw:
+            return []
+        try:
+            value = json.loads(raw)
+            return value if isinstance(value, list) else []
+        except json.JSONDecodeError:
+            return []
     
     def _send_sse_message(
         self,

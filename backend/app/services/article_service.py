@@ -48,6 +48,10 @@ class ArticleService:
         login_user: LoginUserVO,
         style: Optional[str] = None,
         enabled_image_methods: Optional[List[str]] = None,
+        enable_memory: bool = True,
+        enable_rag: bool = True,
+        enabled_skill_refs: Optional[List[str]] = None,
+        rag_collections: Optional[List[str]] = None,
     ) -> str:
         """创建文章任务"""
         final_image_methods = self._process_image_methods(enabled_image_methods, login_user)
@@ -57,10 +61,14 @@ class ArticleService:
         now = datetime.now()
         query = """
             INSERT INTO article (
-                taskId, userId, topic, style, enabledImageMethods, status, phase, createTime
+                taskId, userId, topic, style, enabledImageMethods,
+                enableMemory, enableRag, enabledSkillRefs, ragCollections,
+                status, phase, createTime
             )
             VALUES (
-                :taskId, :userId, :topic, :style, :enabledImageMethods, :status, :phase, :createTime
+                :taskId, :userId, :topic, :style, :enabledImageMethods,
+                :enableMemory, :enableRag, :enabledSkillRefs, :ragCollections,
+                :status, :phase, :createTime
             )
         """
         await self.db.execute(
@@ -73,6 +81,10 @@ class ArticleService:
                 "enabledImageMethods": json.dumps(final_image_methods, ensure_ascii=False)
                 if final_image_methods
                 else None,
+                "enableMemory": 1 if enable_memory else 0,
+                "enableRag": 1 if enable_rag else 0,
+                "enabledSkillRefs": json.dumps(enabled_skill_refs or [], ensure_ascii=False),
+                "ragCollections": json.dumps(rag_collections or [], ensure_ascii=False),
                 "status": ArticleStatusEnum.PENDING.value,
                 "phase": ArticlePhaseEnum.PENDING.value,
                 "createTime": now,
@@ -87,6 +99,10 @@ class ArticleService:
         login_user: LoginUserVO,
         style: Optional[str] = None,
         enabled_image_methods: Optional[List[str]] = None,
+        enable_memory: bool = True,
+        enable_rag: bool = True,
+        enabled_skill_refs: Optional[List[str]] = None,
+        rag_collections: Optional[List[str]] = None,
     ) -> str:
         """在同一事务中完成配额扣减和任务创建"""
         if self._is_vip_or_admin(login_user):
@@ -95,6 +111,10 @@ class ArticleService:
                 login_user=login_user,
                 style=style,
                 enabled_image_methods=enabled_image_methods,
+                enable_memory=enable_memory,
+                enable_rag=enable_rag,
+                enabled_skill_refs=enabled_skill_refs,
+                rag_collections=rag_collections,
             )
 
         async with self.db.transaction():
@@ -124,6 +144,10 @@ class ArticleService:
                 login_user=login_user,
                 style=style,
                 enabled_image_methods=enabled_image_methods,
+                enable_memory=enable_memory,
+                enable_rag=enable_rag,
+                enabled_skill_refs=enabled_skill_refs,
+                rag_collections=rag_collections,
             )
 
     async def get_by_task_id(self, task_id: str):
