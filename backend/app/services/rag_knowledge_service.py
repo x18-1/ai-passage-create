@@ -73,6 +73,72 @@ class RagKnowledgeService:
         )
         return [self._to_vo(row) for row in rows]
 
+    async def delete_document(self, doc_id: int, user_id: int) -> bool:
+        """Delete document from DB and remove its vectors from ChromaDB."""
+        row = await self.db.fetch_one(
+            query="SELECT filePath, collectionName FROM knowledge_document WHERE id = :id AND userId = :userId AND isDelete = 0",
+            values={"id": doc_id, "userId": user_id},
+        )
+        if not row:
+            return False
+
+        # Remove from ChromaDB
+        try:
+            from app.rag.libs.vector_store.vector_store_factory import VectorStoreFactory
+            from app.rag.config import get_rag_settings
+            settings = get_rag_settings()
+            store = VectorStoreFactory.create(settings, collection_name=row["collectionName"])
+            file_path = row["filePath"] or ""
+            if file_path:
+                store.delete_by_metadata({"source_path": file_path})
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("ChromaDB delete failed: %s", e)
+
+        # Soft-delete in DB
+        await self.db.execute(
+            query="UPDATE knowledge_document SET isDelete = 1 WHERE id = :id AND userId = :userId",
+            values={"id": doc_id, "userId": user_id},
+        )
+        return True
+
+    async def get_document_chunks(self, doc_id: int, user_id: int) -> list[dict]:
+        """Return chunks stored in ChromaDB for a given document."""
+        row = await self.db.fetch_one(
+            query="SELECT filePath, collectionName FROM knowledge_document WHERE id = :id AND userId = :userId AND isDelete = 0",
+            values={"id": doc_id, "userId": user_id},
+        )
+        if not row:
+            return []
+
+        file_path = row["filePath"] or ""
+        if not file_path:
+            return []
+
+        try:
+            from app.rag.libs.vector_store.vector_store_factory import VectorStoreFactory
+            from app.rag.config import get_rag_settings
+            settings = get_rag_settings()
+            store = VectorStoreFactory.create(settings, collection_name=row["collectionName"])
+            results = store.collection.get(
+                where={"source_path": file_path},
+                include=["documents", "metadatas"],
+            )
+            chunks = []
+            for i, (doc, meta) in enumerate(zip(results.get("documents") or [], results.get("metadatas") or [])):
+                chunks.append({
+                    "index": i,
+                    "text": doc,
+                    "charCount": len(doc),
+                    "title": (meta or {}).get("title", ""),
+                    "tags": (meta or {}).get("tags", []),
+                })
+            return chunks
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("Get chunks failed: %s", e)
+            return []
+
     async def query_prompt_context(self, user_id: int, query: str, collections: list[str], top_k: int = 5) -> str:
         effective_collections = collections or [
             collection_for(user_id, "upload"),

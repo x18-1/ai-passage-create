@@ -43,3 +43,17 @@ export async function ingestHotspots(recordIds: number[], options?: { [key: stri
     ...(options || {}),
   })
 }
+
+export async function deleteKnowledgeDocument(docId: number, options?: { [key: string]: any }) {
+  return request<API.BaseResponseBoolean>(`/knowledge/documents/${docId}`, {
+    method: 'DELETE',
+    ...(options || {}),
+  })
+}
+
+export async function getDocumentChunks(docId: number, options?: { [key: string]: any }) {
+  return request<any>(`/knowledge/documents/${docId}/chunks`, {
+    method: 'GET',
+    ...(options || {}),
+  })
+}

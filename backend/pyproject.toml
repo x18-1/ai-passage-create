@@ -30,7 +30,7 @@ dependencies = [
     "chromadb>=0.6.0",
     "langchain-text-splitters>=0.3.0",
     "jieba>=0.42",
-    "markitdown>=0.1.0",
+    "markitdown[pdf]>=0.1.0",
     "Pillow>=10.0.0",
 ]
 
