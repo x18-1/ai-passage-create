@@ -23,6 +23,7 @@ from app.schemas.article import (
     Agent4Result
 )
 from app.schemas.article_sync import ArticleSyncRecordUpsertRequest, ArticleSyncRecordVO
+from app.schemas.knowledge import KnowledgeDocumentVO, KnowledgeQueryRequest, KnowledgeQueryResultVO
 from app.schemas.memory import MemoryCreateRequest, MemoryUpdateRequest, MemoryVO
 from app.schemas.statistics import AgentLogVO, AgentExecutionStatsVO, StatisticsVO
 from app.schemas.writing_skill import WritingSkillVO
@@ -50,6 +51,9 @@ __all__ = [
     "Agent4Result",
     "ArticleSyncRecordUpsertRequest",
     "ArticleSyncRecordVO",
+    "KnowledgeDocumentVO",
+    "KnowledgeQueryRequest",
+    "KnowledgeQueryResultVO",
     "MemoryCreateRequest",
     "MemoryUpdateRequest",
     "MemoryVO",
