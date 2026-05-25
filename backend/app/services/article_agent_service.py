@@ -23,6 +23,7 @@ from app.schemas.article import (
 )
 from app.models.enums import SseMessageTypeEnum, ImageMethodEnum, ArticleStyleEnum
 from app.services.agent_log_service import AgentLogService
+from app.services.agent_context_builder import AgentContextBuilder
 from app.services.image_service_strategy import ImageServiceStrategy
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class ArticleAgentService:
         
         # 初始化策略模式（第 5 期改动）
         self.image_service_strategy = ImageServiceStrategy()
+        self.agent_context_builder = AgentContextBuilder(database)
         self.agent_log_service = AgentLogService(database)
         self.parallel_image_generator = ParallelImageGenerator(
             image_service_strategy=self.image_service_strategy,
@@ -99,6 +101,7 @@ class ArticleAgentService:
         """智能体1：生成标题方案（3-5个）"""
         prompt = PromptConstant.AGENT1_TITLE_PROMPT.replace("{topic}", state.topic)
         prompt += self._get_style_prompt(state.style)  # 第 5 期新增：风格 Prompt
+        prompt += await self._build_context_prompt(state, "title")
 
         async with self._agent_log_context(
             task_id=state.task_id,
@@ -132,6 +135,7 @@ class ArticleAgentService:
             .replace("{descriptionSection}", description_section)
         )
         prompt += self._get_style_prompt(state.style)  # 第 5 期新增：风格 Prompt
+        prompt += await self._build_context_prompt(state, "outline")
 
         async with self._agent_log_context(
             task_id=state.task_id,
@@ -169,6 +173,7 @@ class ArticleAgentService:
             .replace("{outline}", outline_text)
         )
         prompt += self._get_style_prompt(state.style)  # 第 5 期新增：风格 Prompt
+        prompt += await self._build_context_prompt(state, "content")
 
         async with self._agent_log_context(
             task_id=state.task_id,
@@ -205,6 +210,7 @@ class ArticleAgentService:
             .replace("{availableMethods}", available_methods)
             .replace("{methodUsageGuide}", method_usage_guide)
         )
+        prompt += await self._build_context_prompt(state, "image")
 
         async with self._agent_log_context(
             task_id=state.task_id,
@@ -324,6 +330,27 @@ class ArticleAgentService:
             messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content
+
+    async def _build_context_prompt(self, state: ArticleState, stage: str) -> str:
+        """构建当前阶段的上下文增强 Prompt."""
+        if not state.user_id:
+            return ""
+        try:
+            context = await self.agent_context_builder.build_context(
+                user_id=state.user_id,
+                task_id=state.task_id or "unknown",
+                stage=stage,
+                topic=state.topic or "",
+                style=state.style,
+                enabled_skill_refs=state.enabled_skill_refs or [],
+                enable_memory=state.enable_memory,
+                enable_rag=state.enable_rag,
+                rag_collections=state.rag_collections or [],
+            )
+            return f"\n\n{context.instruction_block}" if context.instruction_block else ""
+        except Exception as exc:
+            logger.warning("构建Agent上下文失败 taskId=%s stage=%s error=%s", state.task_id, stage, exc)
+            return ""
     
     async def _call_llm_with_streaming(
         self,

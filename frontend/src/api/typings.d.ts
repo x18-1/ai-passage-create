@@ -138,6 +138,59 @@ declare namespace API {
     topic?: string
     style?: string
     enabledImageMethods?: string[]
+    enableMemory?: boolean
+    enableRag?: boolean
+    enabledSkillRefs?: string[]
+    ragCollections?: string[]
+  }
+
+  type MemoryCreateRequest = {
+    memoryType?: string
+    title?: string
+    content?: string
+    weight?: number
+  }
+
+  type MemoryVO = {
+    id?: number
+    userId?: number
+    memoryType?: string
+    title?: string
+    content?: string
+    weight?: number
+    source?: string
+    isActive?: boolean
+    createTime?: string
+    updateTime?: string
+  }
+
+  type WritingSkillVO = {
+    ref: string
+    id: string
+    name: string
+    description?: string
+    applicableStages?: string[]
+    content?: string
+  }
+
+  type KnowledgeDocumentVO = {
+    id?: number
+    userId?: number
+    title?: string
+    sourceType?: string
+    sourceId?: string
+    collectionName?: string
+    status?: string
+    chunkCount?: number
+    errorMessage?: string
+    createTime?: string
+    updateTime?: string
+  }
+
+  type KnowledgeQueryRequest = {
+    query: string
+    collections?: string[]
+    topK?: number
   }
 
   type ArticleQueryRequest = {
@@ -220,6 +273,24 @@ declare namespace API {
   type BaseResponseListOutlineSection = {
     code?: number
     data?: OutlineSection[]
+    message?: string
+  }
+
+  type BaseResponseListMemoryVO = {
+    code?: number
+    data?: MemoryVO[]
+    message?: string
+  }
+
+  type BaseResponseListWritingSkillVO = {
+    code?: number
+    data?: WritingSkillVO[]
+    message?: string
+  }
+
+  type BaseResponseListKnowledgeDocumentVO = {
+    code?: number
+    data?: KnowledgeDocumentVO[]
     message?: string
   }
 

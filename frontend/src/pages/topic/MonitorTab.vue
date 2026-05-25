@@ -32,6 +32,9 @@
         <template v-if="selectedIds.length > 0">
           <span class="selected-count">已选 {{ selectedIds.length }} 条</span>
           <a-button @click="selectedIds = []">取消选择</a-button>
+          <a-button @click="doIngestHotspots" title="将选中热点加入知识库，供 RAG 检索">
+            入库
+          </a-button>
           <a-button type="primary" @click="doGenerateTopics">
             生成选题
           </a-button>
@@ -184,6 +187,7 @@ import { ref, onMounted, reactive } from 'vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import { listKeywords, getRecordStats, listRecords, triggerMonitor } from '@/api/hotspotMonitorController'
+import { ingestHotspots } from '@/api/knowledgeController'
 import { useHotspotWs } from '@/composables/useHotspotWs'
 
 const emit = defineEmits<{
@@ -250,6 +254,16 @@ function doGenerateTopics() {
   const selected = records.value.filter((r) => selectedIds.value.includes(r.id))
   if (selected.length === 0) { message.warning('请先勾选热点记录'); return }
   emit('generate-topics', selected)
+}
+
+async function doIngestHotspots() {
+  if (selectedIds.value.length === 0) { message.warning('请先勾选热点记录'); return }
+  try {
+    await ingestHotspots(selectedIds.value)
+    message.success('已加入热点知识库')
+  } catch {
+    message.error('入库失败')
+  }
 }
 
 async function loadStats() {

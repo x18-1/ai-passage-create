@@ -1,9 +1,14 @@
 .DS_Store
 *.log
 .claude/**
+.worktrees/
 
 CLAUDE.md
 
 plugin/
 
 docs
+
+# RAG runtime data
+backend/storage/
+backend/data/

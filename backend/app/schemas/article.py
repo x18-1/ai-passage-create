@@ -16,6 +16,13 @@ class ArticleCreateRequest(BaseModel):
         alias="enabledImageMethods",
         description="允许的配图方式列表（为空表示支持所有方式）"
     )
+    enable_memory: bool = Field(True, alias="enableMemory", description="是否启用长期记忆")
+    enable_rag: bool = Field(True, alias="enableRag", description="是否启用RAG")
+    enabled_skill_refs: List[str] = Field(default_factory=list, alias="enabledSkillRefs")
+    rag_collections: List[str] = Field(default_factory=list, alias="ragCollections")
+
+    class Config:
+        populate_by_name = True
 
 
 class ArticleQueryRequest(PageRequest):
@@ -136,9 +143,14 @@ class ArticleState:
     
     def __init__(self):
         self.task_id: Optional[str] = None
+        self.user_id: Optional[int] = None
         self.topic: Optional[str] = None
         self.user_description: Optional[str] = None
         self.style: Optional[str] = None  # 第 5 期新增
+        self.enable_memory: bool = True
+        self.enable_rag: bool = True
+        self.enabled_skill_refs: List[str] = []
+        self.rag_collections: List[str] = []
         self.phase: Optional[str] = None
         self.title_options: Optional[List[TitleOption]] = None
         self.enabled_image_methods: Optional[List[str]] = None  # 第 5 期新增

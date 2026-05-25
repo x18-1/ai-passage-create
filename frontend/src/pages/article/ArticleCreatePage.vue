@@ -105,6 +105,26 @@
                 </div>
               </div>
 
+              <div class="context-section">
+                <div class="section-header">
+                  <span class="section-title">上下文增强</span>
+                  <RouterLink to="/knowledge" class="section-link">管理知识库</RouterLink>
+                </div>
+                <div class="context-toggles">
+                  <a-checkbox v-model:checked="contextOptions.enableMemory">长期记忆</a-checkbox>
+                  <a-checkbox v-model:checked="contextOptions.enableRag">知识库检索</a-checkbox>
+                </div>
+                <a-checkbox-group v-model:value="contextOptions.enabledSkillRefs" class="skills-group">
+                  <a-checkbox
+                    v-for="skill in writingSkills"
+                    :key="skill.ref"
+                    :value="skill.ref"
+                  >
+                    {{ skill.name }}
+                  </a-checkbox>
+                </a-checkbox-group>
+              </div>
+
               <a-button
                 type="primary"
                 size="large"
@@ -564,6 +584,8 @@ import {
   FileTextOutlined
 } from '@ant-design/icons-vue'
 import { createArticle, confirmTitle, confirmOutline } from '@/api/articleController'
+import { listWritingSkills } from '@/api/writingSkillController'
+import { buildCreateArticlePayload } from '@/utils/articleContextOptions'
 import { connectSSE, closeSSE, type SSEMessage } from '@/utils/sse'
 import { isAdmin as checkIsAdmin, isVip as checkIsVip, hasQuota as checkHasQuota } from '@/utils/permission'
 import { marked } from 'marked'
@@ -607,6 +629,13 @@ const currentPhase = ref<string>('INPUT')  // INPUT, TITLE_SELECTING, OUTLINE_ED
 const topic = ref('')
 const selectedStyle = ref('')  // 选中的文章风格（空字符串表示默认）
 const selectedImageMethods = ref<string[]>([])  // 选中的配图方式（空数组表示全部）
+const writingSkills = ref<API.WritingSkillVO[]>([])
+const contextOptions = ref({
+  enableMemory: true,
+  enableRag: true,
+  enabledSkillRefs: [] as string[],
+  ragCollections: [] as string[],
+})
 const isCreating = ref(false)
 const isCompleted = ref(false)
 const isStreaming = ref(false)
@@ -735,11 +764,14 @@ const startCreate = async () => {
 
   try {
     // 创建任务
-    const res = await createArticle({
-      topic: topic.value,
+    const res = await createArticle(buildCreateArticlePayload(topic.value, {
       style: selectedStyle.value || undefined,
-      enabledImageMethods: selectedImageMethods.value.length > 0 ? selectedImageMethods.value : undefined
-    })
+      enabledImageMethods: selectedImageMethods.value,
+      enableMemory: contextOptions.value.enableMemory,
+      enableRag: contextOptions.value.enableRag,
+      enabledSkillRefs: contextOptions.value.enabledSkillRefs,
+      ragCollections: contextOptions.value.ragCollections,
+    }))
     const newTaskId = res.data.data
     if (!newTaskId) {
       throw new Error('创建任务失败：未返回任务ID')
@@ -965,6 +997,12 @@ const resetCreate = () => {
   currentPhase.value = 'INPUT'
   topic.value = ''
   selectedStyle.value = ''
+  contextOptions.value = {
+    enableMemory: true,
+    enableRag: true,
+    enabledSkillRefs: [],
+    ragCollections: [],
+  }
   titleOptions.value = []
   outline.value = []
   isCreating.value = false
@@ -991,6 +1029,13 @@ onMounted(() => {
   if (route.query.topic) {
     topic.value = route.query.topic as string
   }
+  listWritingSkills()
+    .then((res) => {
+      writingSkills.value = res.data?.data ?? []
+    })
+    .catch(() => {
+      writingSkills.value = []
+    })
 })
 
 // 组件卸载前关闭 SSE
@@ -1292,9 +1337,17 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border-light);
 }
 
+.context-section {
+  padding: 16px;
+  background: var(--color-background-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border-light);
+}
+
 .section-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 12px;
 }
@@ -1308,6 +1361,30 @@ onBeforeUnmount(() => {
 .section-tip {
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+.section-link {
+  font-size: 12px;
+  color: var(--color-primary);
+}
+
+.context-toggles,
+.skills-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.context-toggles {
+  margin-bottom: 12px;
+}
+
+.skills-group :deep(.ant-checkbox-wrapper) {
+  margin: 0;
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .methods-group {
